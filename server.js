@@ -1,36 +1,32 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
+const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-function getPosts() {
+app.get('/api/posts', async (req, res) => {
   try {
-    const data = fs.readFileSync(path.join(__dirname, 'data', 'posts.json'));
-    return JSON.parse(data);
+    const [rows] = await db.query('SELECT id, title, content, date FROM posts ORDER BY date DESC');
+    res.json(rows);
   } catch (err) {
-    return [];
+    console.error(err);
+    res.status(500).json({ error: 'DB error' });
   }
-}
-
-function savePosts(posts) {
-  fs.writeFileSync(path.join(__dirname, 'data', 'posts.json'), JSON.stringify(posts, null, 2));
-}
-
-app.get('/api/posts', (req, res) => {
-  res.json(getPosts());
 });
 
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', async (req, res) => {
   const { title, content } = req.body;
   if (!title || !content) return res.status(400).json({ error: 'Eksik veri' });
-  const posts = getPosts();
-  posts.push({ title, content, date: Date.now() });
-  savePosts(posts);
-  res.status(201).json({ success: true });
+  try {
+    await db.query('INSERT INTO posts (title, content, date) VALUES (?, ?, NOW())', [title, content]);
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB error' });
+  }
 });
 
 app.listen(PORT, () => console.log('Server running on port', PORT));
