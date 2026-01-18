@@ -83,7 +83,69 @@ export class RconService {
     return { ok: true, ...this.status() };
   }
 
-  // (disconnect/command aynı kalsın)
+  async disconnect() {
+    if (!RconService.connection) {
+      return { ok: true, alreadyDisconnected: true, ...this.status() };
+    }
+
+    try {
+      const connection = RconService.connection as { disconnect?: () => Promise<void> | void; kill?: (err?: Error) => void };
+
+      if (typeof connection.disconnect === "function") {
+        await connection.disconnect();
+      } else if (typeof connection.kill === "function") {
+        connection.kill();
+      }
+
+      RconService.connection = null;
+      RconService.socket = null;
+
+      return { ok: true, ...this.status() };
+    } catch (err) {
+      throw new AppError({
+        code: ErrorCodes.RCON_CONNECTION_FAILED,
+        status: 500,
+        message: "Failed to disconnect from BattlEye RCON.",
+        cause: err,
+      });
+    }
+  }
+
+  async command(cmd: string) {
+    if (!RconService.connection) {
+      throw new AppError({
+        code: ErrorCodes.RCON_CONNECTION_FAILED,
+        status: 400,
+        message: "BattlEye RCON is not connected.",
+      });
+    }
+
+    const connection = RconService.connection as { command?: (input: string) => Promise<unknown> };
+    if (typeof connection.command !== "function") {
+      throw new AppError({
+        code: ErrorCodes.RCON_COMMAND_FAILED,
+        status: 500,
+        message: "RCON connection does not support command dispatch.",
+      });
+    }
+
+    try {
+      pushMessage(`command: ${cmd}`);
+      const response = await connection.command(cmd);
+      if (response) {
+        pushMessage(`response: ${safeJson(response)}`);
+      }
+      return { ok: true, response };
+    } catch (err) {
+      throw new AppError({
+        code: ErrorCodes.RCON_COMMAND_FAILED,
+        status: 500,
+        message: "Failed to send RCON command.",
+        cause: err,
+        context: { cmd },
+      });
+    }
+  }
 }
 
 function pushMessage(line: string) {

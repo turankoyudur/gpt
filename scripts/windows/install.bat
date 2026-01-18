@@ -70,13 +70,39 @@ if not exist ".env" (
   call :log ".env already exists."
 )
 
-REM --- install deps ---
-call :log "Installing npm dependencies..."
-call npm install >>"%LOGFILE%" 2>&1
+REM --- install deps (prefer pnpm; fallback to npm) ---
+call :log "Installing dependencies (pnpm preferred, npm fallback)..."
+where pnpm >nul 2>nul
+if errorlevel 1 (
+  call :log "pnpm not found. Enabling corepack + preparing pnpm..."
+  call corepack enable >>"%LOGFILE%" 2>&1
+  if errorlevel 1 (
+    call :log "WARN: corepack enable failed. Falling back to npm install."
+    goto :npm_install
+  )
+  call corepack prepare pnpm@10.14.0 --activate >>"%LOGFILE%" 2>&1
+  if errorlevel 1 (
+    call :log "WARN: corepack prepare failed. Falling back to npm install."
+    goto :npm_install
+  )
+)
+
+call :log "Running pnpm install --frozen-lockfile..."
+call pnpm install --frozen-lockfile >>"%LOGFILE%" 2>&1
+if errorlevel 1 (
+  call :log "WARN: pnpm install failed. Falling back to npm install (with devDependencies)."
+  goto :npm_install
+)
+goto :deps_done
+
+:npm_install
+call :log "Running npm install --include=dev..."
+call npm install --include=dev >>"%LOGFILE%" 2>&1
 if errorlevel 1 (
   call :log "ERROR: npm install failed. See log: %LOGFILE%"
   exit /b 14
 )
+:deps_done
 
 REM --- init DB ---
 call :log "Initializing DB (prisma generate + db push)..."
