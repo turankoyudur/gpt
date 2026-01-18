@@ -80,7 +80,7 @@ index 3333333..4444444 100644
          "cors",
 +        "@prisma/client",
 +        "prisma",
-+        "battleye",
++        "battle-node-v2",
        ],
        output: {
          format: "es",

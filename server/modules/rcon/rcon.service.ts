@@ -224,7 +224,7 @@ function safeJson(v: unknown) {
 
 async function loadBattleye() {
   try {
-    // Some environments ship battleye as CommonJS, some as ESM.
+    // Some environments ship battle-node-v2 as CommonJS, some as ESM.
     // Dynamic import handles both.
     const mod: any = await import("battle-node-v2");
     return mod?.default ?? mod;

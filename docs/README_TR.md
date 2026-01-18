@@ -58,7 +58,7 @@ Kontroller:
 - DB baglantisi
 - `dist/server/node-build.mjs` mevcut mu
 - Settings icinde SteamCMD / DayZ / BattlEye path’leri set mi
-- RCON dependency (battleye) sagligi
+- RCON dependency (battle-node-v2) sagligi
 
 ## 6) Sorun Giderme (FAQ)
 
@@ -71,10 +71,9 @@ Kontroller:
 - `scripts\windows\start.bat` zaten bu kontrolu yapar
 
 ### C) RCON calismiyor
-- `battleye` npm paketi yuklu mu kontrol edin
+- `battle-node-v2` npm paketi yuklu mu kontrol edin
 - `npm run doctor` ile RCON dependency sagligini gorun
 - Eksikse `npm install` tekrar calistirin
 
 ### D) Ayar yollarini guncellemek
 UI uzerindeki Settings sayfasindan DayZ/SteamCMD/BattlEye pathlerini girip kaydedin.
-

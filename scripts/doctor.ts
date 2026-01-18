@@ -122,20 +122,20 @@ async function checkSettings() {
 }
 
 async function checkRconDependency() {
-  const battleyePath = path.join(process.cwd(), "node_modules", "battleye");
-  if (!fs.existsSync(battleyePath)) {
-    record("RCON dependency", "warn", "battleye package not found in node_modules.");
+  const battleNodePath = path.join(process.cwd(), "node_modules", "battle-node-v2");
+  if (!fs.existsSync(battleNodePath)) {
+    record("RCON dependency", "warn", "battle-node-v2 package not found in node_modules.");
     return;
   }
 
   try {
-    await import("battleye");
-    record("RCON dependency", "ok", "battleye package import succeeded.");
+    await import("battle-node-v2");
+    record("RCON dependency", "ok", "battle-node-v2 package import succeeded.");
   } catch (error) {
     record(
       "RCON dependency",
       "warn",
-      `battleye package present but failed to import: ${(error as Error).message}`,
+      `battle-node-v2 package present but failed to import: ${(error as Error).message}`,
     );
   }
 }

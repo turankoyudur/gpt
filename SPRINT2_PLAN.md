@@ -49,7 +49,7 @@ Hedef: Omega Manager + CF Cloud benzeri panel deneyimine yaklaşmak.
 - “wipe day” otomasyonu (log + confirmation)
 
 ### 2.3 Adapter iyileştirmesi
-- Eğer `battleye` npm paketi kararsızsa:
+- Eğer `battle-node-v2` npm paketi kararsızsa:
   - Alternatif RCON client adapter (aynı interface)
   - Runtime seçim: Settings’ten adapter seç
 

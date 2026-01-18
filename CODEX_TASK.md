@@ -48,7 +48,7 @@ UI’dan girilecek ama defaults olarak dokümante edilecek:
 
 3. Uygulama çalışınca `http://localhost:3000` açılacak.
 4. Tek bir modül bozuk diye panel komple düşmeyecek:
-   - Örn. `battleye`/RCON dependency sorunu varsa panel açılacak
+   - Örn. `battle-node-v2`/RCON dependency sorunu varsa panel açılacak
    - RCON ekranında net hata kodu ve mesaj dönecek (ve loglanacak)
 
 ### B) Hata kodları + log
@@ -81,7 +81,7 @@ UI’dan girilecek ama defaults olarak dokümante edilecek:
   - `fileURLToPath(import.meta.url)`
 
 ### 3.4 RCON dependency sağlığı
-- `battleye` gibi dependency’ler import-time’da crash etmemeli.
+- `battle-node-v2` gibi dependency’ler import-time’da crash etmemeli.
 - RCON mimarisi: adapter + lazy-load
   - Panel açılışında crash yok
   - Connect anında dependency yüklenir
@@ -120,7 +120,7 @@ UI’dan girilecek ama defaults olarak dokümante edilecek:
 - DB connection ok mu
 - dist output var mı
 - Settings: dayz path/steamcmd path/battleye cfg path set mi
-- RCON dependency health (battleye dosyaları var mı)
+- RCON dependency health (battle-node-v2 dosyaları var mı)
 
 ---
 
