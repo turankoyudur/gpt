@@ -15,10 +15,12 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build --config vite.config.client.ts",
     "build:server": "vite build --config vite.config.server.ts",
+    "prestart": "npm run db:setup",
     "start": "node dist/server/node-build.mjs",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:setup": "npm run db:generate && npm run db:push",
+    "doctor": "tsx scripts/doctor.ts",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
     "typecheck": "tsc"
