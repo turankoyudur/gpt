@@ -1,8 +1,6 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { getPrisma } from "../server/db/prisma";
-import { SettingsService } from "../server/modules/settings/settings.service";
 
 type CheckStatus = "ok" | "warn" | "fail";
 
@@ -40,14 +38,25 @@ async function checkPrismaClient() {
 }
 
 async function checkDatabase() {
-  const prisma = getPrisma();
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    record("Database", "ok", "Connection succeeded.");
+    // Dinamik import: prisma generate yoksa bile doctor script tamamen patlamasın
+    const { getPrisma } = await import("../server/db/prisma");
+    const prisma = getPrisma();
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      record("Database", "ok", "Connection succeeded.");
+    } catch (error) {
+      record("Database", "fail", `Connection failed: ${(error as Error).message}`);
+    } finally {
+      await prisma.$disconnect();
+    }
   } catch (error) {
-    record("Database", "fail", `Connection failed: ${(error as Error).message}`);
-  } finally {
-    await prisma.$disconnect();
+    record(
+      "Database",
+      "fail",
+      `Prisma client unavailable. Run \`npm run db:setup\`. (${(error as Error).message})`,
+    );
   }
 }
 
@@ -61,43 +70,54 @@ async function checkDistOutput() {
 }
 
 async function checkSettings() {
-  const prisma = getPrisma();
-  const settings = new SettingsService(prisma);
   try {
-    const current = await settings.get();
-    const checks = [
-      {
-        label: "SteamCMD path",
-        value: current.steamcmdPath,
-        exists: fs.existsSync(current.steamcmdPath),
-      },
-      {
-        label: "DayZ server path",
-        value: current.dayzServerPath,
-        exists: fs.existsSync(current.dayzServerPath),
-      },
-      {
-        label: "BattlEye cfg path",
-        value: current.battleyeCfgPath,
-        exists: fs.existsSync(current.battleyeCfgPath),
-      },
-    ];
+    // Dinamik import: DB hazır değilse bile doctor çalışsın
+    const [{ getPrisma }, { SettingsService }] = await Promise.all([
+      import("../server/db/prisma"),
+      import("../server/modules/settings/settings.service"),
+    ]);
 
-    for (const check of checks) {
-      if (!check.value) {
-        record("Settings", "fail", `${check.label} is empty.`);
-        continue;
+    const prisma = getPrisma();
+    const settings = new SettingsService(prisma);
+
+    try {
+      const current = await settings.get();
+      const checks = [
+        {
+          label: "SteamCMD path",
+          value: current.steamcmdPath,
+          exists: current.steamcmdPath ? fs.existsSync(current.steamcmdPath) : false,
+        },
+        {
+          label: "DayZ server path",
+          value: current.dayzServerPath,
+          exists: current.dayzServerPath ? fs.existsSync(current.dayzServerPath) : false,
+        },
+        {
+          label: "BattlEye cfg path",
+          value: current.battleyeCfgPath,
+          exists: current.battleyeCfgPath ? fs.existsSync(current.battleyeCfgPath) : false,
+        },
+      ];
+
+      for (const check of checks) {
+        if (!check.value) {
+          record("Settings", "fail", `${check.label} is empty.`);
+          continue;
+        }
+        if (check.exists) {
+          record("Settings", "ok", `${check.label} set (${check.value}).`);
+        } else {
+          record("Settings", "warn", `${check.label} set but missing on disk (${check.value}).`);
+        }
       }
-      if (check.exists) {
-        record("Settings", "ok", `${check.label} set (${check.value}).`);
-      } else {
-        record("Settings", "warn", `${check.label} set but missing on disk (${check.value}).`);
-      }
+    } catch (error) {
+      record("Settings", "fail", `Failed to read settings: ${(error as Error).message}`);
+    } finally {
+      await prisma.$disconnect();
     }
   } catch (error) {
-    record("Settings", "fail", `Failed to read settings: ${(error as Error).message}`);
-  } finally {
-    await prisma.$disconnect();
+    record("Settings", "fail", `Settings check skipped: Prisma client unavailable. (${(error as Error).message})`);
   }
 }
 
@@ -135,9 +155,7 @@ async function run() {
   }
 
   const hasFailures = results.some((result) => result.status === "fail");
-  if (hasFailures) {
-    process.exit(1);
-  }
+  if (hasFailures) process.exit(1);
 }
 
 run();
