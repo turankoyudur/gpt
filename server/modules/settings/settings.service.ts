@@ -18,9 +18,19 @@ export const instanceSettingsSchema = z.object({
     "E:\\steamcmd\\steamapps\\common\\DayZServer\\profiles\\BattlEye\\BEServer_x64.cfg",
   ),
 
+  // RCON (BattlEye)
+  // NOTE:
+  // - Do NOT rely on BEServer_x64.cfg, because DayZ/BattlEye may rename it after the server starts.
+  // - These are entered via the Web UI so the panel can connect reliably.
+  rconHost: z.string().min(1).default("127.0.0.1"),
+  rconPort: z.coerce.number().int().positive().default(2306),
+  rconPassword: z.string().optional().default(""),
+  rconAutoConnect: z.coerce.boolean().default(true),
+
   // Launch params (stored as key/value and compiled into CLI args)
   serverPort: z.coerce.number().int().positive().default(2302),
   serverConfigFile: z.string().min(1).default("serverDZ.cfg"),
+  additionalLaunchArgs: z.string().optional().default(""),
 
   // Steam login (optional; workshop downloads often require an account)
   steamUser: z.string().optional().default("") ,
@@ -75,7 +85,8 @@ export class SettingsService {
       steamcmdPath: fileExists(s.steamcmdPath),
       dayzServerPath: dirExists(s.dayzServerPath),
       profilesPath: dirExists(s.profilesPath),
-      battleyeCfgPath: fileExists(s.battleyeCfgPath),
+      // Allow either a file path OR a directory (BattlEye may rename cfg files at runtime)
+      battleyeCfgPath: fileExists(s.battleyeCfgPath) || dirExists(s.battleyeCfgPath),
     };
 
     return results;

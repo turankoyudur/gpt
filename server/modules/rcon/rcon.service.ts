@@ -1,35 +1,27 @@
-import { createRequire } from "module";
 import { AppError, ErrorCodes } from "../../core/errors";
-import { ConfigService } from "../config/config.service";
-
-// createRequire güvenli; ama "battleye" yüklemeyi connect anına erteliyoruz.
-const require = createRequire(import.meta.url);
-
-function loadBattleye() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("battleye") as any;
-  } catch (err) {
-    // Panel çalışsın; sadece RCON kullanılırken bu hata dönsün
-    throw new AppError({
-      code: ErrorCodes.DEPENDENCY_MISSING,
-      status: 500,
-      message:
-        "BattlEye RCON library could not be loaded (npm package: battleye). Reinstall dependencies or switch to a supported RCON package.",
-      cause: err,
-    });
-  }
-}
+import { getLogger } from "../../core/logger";
+import { getPrisma } from "../../db/prisma";
+import { SettingsService } from "../settings/settings.service";
 
 type BattleyeSocket = any;
 type BattleyeConnection = any;
 
+/**
+ * RconService
+ *
+ * IMPORTANT DESIGN CHOICE:
+ * - We DO NOT read BattlEye RCON credentials (ip/port/password) from BEServer_x64.cfg.
+ *   DayZ/BattlEye may rename that cfg file after the server starts (e.g., BEServer_x64_active_113.cfg).
+ * - Instead, credentials are stored in DB Settings and entered via Web UI.
+ */
 export class RconService {
   private static socket: BattleyeSocket | null = null;
   private static connection: BattleyeConnection | null = null;
   private static lastMessages: string[] = [];
 
-  private readonly cfg = new ConfigService();
+  private readonly db = getPrisma();
+  private readonly settings = new SettingsService(this.db);
+  private readonly log = getLogger();
 
   status() {
     return {
@@ -38,44 +30,84 @@ export class RconService {
     };
   }
 
+  /**
+   * Connects using RCON settings from the DB.
+   *
+   * Safe behavior:
+   * - If credentials are missing -> throws SETTINGS_NOT_CONFIGURED (400)
+   * - If the battleye npm package cannot be loaded -> throws DEPENDENCY_MISSING (500)
+   * - Never crashes the whole app; errors are wrapped as AppError with stable error codes.
+   */
   async connect() {
     if (RconService.connection) return { ok: true, alreadyConnected: true, ...this.status() };
 
-    // ✅ battleye burada yükleniyor (lazy)
-    const battleye = loadBattleye();
+    const s = await this.settings.get();
+    const ip = (s.rconHost || "127.0.0.1").trim();
+    const port = Number(s.rconPort);
+    const password = (s.rconPassword || "").trim();
 
-    const parsed = await this.cfg.readBattlEyeCfgParsed();
-
-    const password = parsed.RConPassword;
-    const ip = parsed.RConIP ?? "127.0.0.1";
-    const portRaw = parsed.RConPort;
-    const port = portRaw ? Number(portRaw) : NaN;
-
-    if (!password || !Number.isFinite(port)) {
+    if (!password || !Number.isFinite(port) || port <= 0) {
       throw new AppError({
         code: ErrorCodes.SETTINGS_NOT_CONFIGURED,
         status: 400,
-        message: "BattlEye RCON is not configured. Please set RConPassword and RConPort in BEServer_x64.cfg.",
-        context: { password: !!password, portRaw },
+        message: "RCON is not configured. Please set RCON host/port/password in Settings.",
+        context: { hasPassword: !!password, port },
       });
     }
 
+    const battleye = await loadBattleye();
+
+    // Client-side socket port. If you run multiple connections later, make this configurable.
     const listenPort = 2310;
     const socket = new battleye.Socket({ port: listenPort, ip: "0.0.0.0" });
 
+    // Create connection with keepalive and reconnect enabled.
     const conn = socket.connection(
-      { name: "dayz-server", password, ip, port },
-      { reconnect: true, keepAlive: true, keepAliveInterval: 15000, timeout: true, serverTimeout: 30000 },
+      {
+        name: "dayz-server",
+        password,
+        ip,
+        port,
+      },
+      {
+        reconnect: true,
+        keepAlive: true,
+        keepAliveInterval: 15000,
+        timeout: true,
+        serverTimeout: 30000,
+      },
     );
 
-    socket.on("received", (_resolved: any, packet: any) => pushMessage(`received packet: ${safeJson(packet)}`));
-    socket.on("sent", (packet: any) => pushMessage(`sent packet: ${safeJson(packet)}`));
-    socket.on("error", (err: any) => pushMessage(`socket error: ${String(err?.message ?? err)}`));
+    socket.on("received", (_resolved: any, packet: any) => {
+      pushMessage(`received packet: ${safeJson(packet)}`);
+    });
+    socket.on("sent", (packet: any) => {
+      pushMessage(`sent packet: ${safeJson(packet)}`);
+    });
+    socket.on("error", (err: any) => {
+      pushMessage(`socket error: ${String(err?.message ?? err)}`);
+    });
 
-    conn.on("message", (message: string) => pushMessage(message));
-    conn.on("connected", () => pushMessage("connected"));
-    conn.on("disconnected", (reason: any) => pushMessage(`disconnected: ${safeJson(reason)}`));
-    conn.on("error", (err: any) => pushMessage(`connection error: ${String(err?.message ?? err)}`));
+    conn.on("message", (message: string) => {
+      // Server messages (chat, joins, etc.) show up here.
+      pushMessage(message);
+    });
+
+    conn.on("connected", () => {
+      pushMessage("connected");
+      this.log.info("RCON connected", { code: "RCON_CONNECTED", context: { ip, port } });
+    });
+    conn.on("disconnected", (reason: any) => {
+      pushMessage(`disconnected: ${safeJson(reason)}`);
+      this.log.warn("RCON disconnected", { code: "RCON_DISCONNECTED", context: { reason } });
+    });
+    conn.on("error", (err: any) => {
+      pushMessage(`connection error: ${String(err?.message ?? err)}`);
+      this.log.warn("RCON connection error", {
+        code: ErrorCodes.RCON_CONNECTION_FAILED,
+        context: { message: String(err?.message ?? err) },
+      });
+    });
 
     RconService.socket = socket;
     RconService.connection = conn;
@@ -83,74 +115,88 @@ export class RconService {
     return { ok: true, ...this.status() };
   }
 
+  /**
+   * Best-effort disconnect.
+   * This should never throw; the panel should keep running even if the adapter behaves weirdly.
+   */
   async disconnect() {
-    if (!RconService.connection) {
-      return { ok: true, alreadyDisconnected: true, ...this.status() };
-    }
+    const sock = RconService.socket;
+    const conn = RconService.connection;
+    RconService.connection = null;
+    RconService.socket = null;
 
     try {
-      const connection = RconService.connection as { disconnect?: () => Promise<void> | void; kill?: (err?: Error) => void };
-
-      if (typeof connection.disconnect === "function") {
-        await connection.disconnect();
-      } else if (typeof connection.kill === "function") {
-        connection.kill();
-      }
-
-      RconService.connection = null;
-      RconService.socket = null;
-
-      return { ok: true, ...this.status() };
-    } catch (err) {
-      throw new AppError({
-        code: ErrorCodes.RCON_CONNECTION_FAILED,
-        status: 500,
-        message: "Failed to disconnect from BattlEye RCON.",
-        cause: err,
-      });
+      conn?.disconnect?.();
+    } catch {
+      // ignore
     }
+    try {
+      sock?.close?.();
+    } catch {
+      // ignore
+    }
+    return { ok: true };
   }
 
+  /**
+   * Sends a command. If not connected, tries to connect first.
+   */
   async command(cmd: string) {
     if (!RconService.connection) {
-      throw new AppError({
-        code: ErrorCodes.RCON_CONNECTION_FAILED,
-        status: 400,
-        message: "BattlEye RCON is not connected.",
-      });
+      await this.connect();
     }
-
-    const connection = RconService.connection as { command?: (input: string) => Promise<unknown> };
-    if (typeof connection.command !== "function") {
+    if (!RconService.connection) {
       throw new AppError({
-        code: ErrorCodes.RCON_COMMAND_FAILED,
-        status: 500,
-        message: "RCON connection does not support command dispatch.",
+        code: ErrorCodes.RCON_NOT_CONNECTED,
+        status: 400,
+        message: "RCON is not connected",
       });
     }
 
     try {
-      pushMessage(`command: ${cmd}`);
-      const response = await connection.command(cmd);
-      if (response) {
-        pushMessage(`response: ${safeJson(response)}`);
-      }
-      return { ok: true, response };
+      const resp = await RconService.connection.command(cmd);
+      pushMessage(`> ${cmd}`);
+      pushMessage(resp?.data ?? safeJson(resp));
+      return { ok: true, response: resp?.data ?? resp };
     } catch (err) {
       throw new AppError({
         code: ErrorCodes.RCON_COMMAND_FAILED,
         status: 500,
-        message: "Failed to send RCON command.",
+        message: "RCON command failed",
         cause: err,
         context: { cmd },
       });
     }
   }
+
+  /**
+   * Auto-connect helper:
+   * - Used by ServerControlService after the game server is started.
+   * - Will not throw if settings are missing; it simply returns ok:false.
+   */
+  async autoConnectIfEnabled() {
+    const s = await this.settings.get();
+    if (!s.rconAutoConnect) return { ok: false, skipped: true, reason: "disabled" };
+    if (!s.rconPassword || !s.rconPort) return { ok: false, skipped: true, reason: "not_configured" };
+    try {
+      return await this.connect();
+    } catch (err) {
+      // Do not crash the caller (this runs in background timers)
+      this.log.warn("RCON auto-connect failed", {
+        code: ErrorCodes.RCON_CONNECTION_FAILED,
+        context: { message: (err as any)?.message ?? String(err) },
+      });
+      return { ok: false, error: (err as any)?.message ?? String(err) };
+    }
+  }
 }
 
 function pushMessage(line: string) {
+  // We keep timestamps in ISO so it is sortable and consistent.
   RconService.lastMessages.push(`${new Date().toISOString()} ${line}`);
-  if (RconService.lastMessages.length > 500) RconService.lastMessages = RconService.lastMessages.slice(-500);
+  if (RconService.lastMessages.length > 500) {
+    RconService.lastMessages = RconService.lastMessages.slice(-500);
+  }
 }
 
 function safeJson(v: unknown) {
@@ -158,5 +204,22 @@ function safeJson(v: unknown) {
     return JSON.stringify(v);
   } catch {
     return String(v);
+  }
+}
+
+async function loadBattleye() {
+  try {
+    // Some environments ship battleye as CommonJS, some as ESM.
+    // Dynamic import handles both.
+    const mod: any = await import("battleye");
+    return mod?.default ?? mod;
+  } catch (err) {
+    throw new AppError({
+      code: ErrorCodes.DEPENDENCY_MISSING,
+      status: 500,
+      message:
+        "BattlEye RCON library could not be loaded (npm package: battleye). Reinstall dependencies or switch to a supported RCON library.",
+      cause: err,
+    });
   }
 }

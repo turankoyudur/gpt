@@ -13,6 +13,10 @@ type SettingsModel = {
   dayzServerPath: string;
   profilesPath: string;
   battleyeCfgPath: string;
+  rconHost: string;
+  rconPort: number;
+  rconPassword: string;
+  rconAutoConnect: boolean;
   serverConfigFile: string;
   serverPort: number;
   additionalLaunchArgs: string;
@@ -94,7 +98,44 @@ export default function Settings() {
           <Field label="SteamCMD Path" value={form.steamcmdPath} onChange={(v) => update("steamcmdPath", v)} />
           <Field label="DayZ Server Path" value={form.dayzServerPath} onChange={(v) => update("dayzServerPath", v)} />
           <Field label="Profiles Path" value={form.profilesPath} onChange={(v) => update("profilesPath", v)} />
-          <Field label="BattlEye CFG Path" value={form.battleyeCfgPath} onChange={(v) => update("battleyeCfgPath", v)} />
+          <Field
+            label="BattlEye CFG Path (file or folder)"
+            value={form.battleyeCfgPath}
+            onChange={(v) => update("battleyeCfgPath", v)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>RCON (BattlEye)</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="RCON Host" value={form.rconHost} onChange={(v) => update("rconHost", v)} />
+          <Field label="RCON Port" value={String(form.rconPort)} onChange={(v) => update("rconPort", Number(v))} />
+          <div className="space-y-2 md:col-span-2">
+            <Label>RCON Password</Label>
+            <Input
+              type="password"
+              value={form.rconPassword}
+              onChange={(e) => update("rconPassword", e.target.value)}
+              placeholder="Enter BattlEye RCON password"
+            />
+            <p className="text-xs text-muted-foreground">
+              We don't read the password from BEServer_x64.cfg because that file name may change after the server starts.
+            </p>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Auto-connect RCON when server starts</Label>
+            <Input
+              value={form.rconAutoConnect ? "true" : "false"}
+              onChange={(e) => update("rconAutoConnect", e.target.value === "true")}
+              placeholder="true/false"
+            />
+            <p className="text-xs text-muted-foreground">
+              Set to "true" to let the panel automatically connect after the DayZ server process is started.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
