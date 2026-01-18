@@ -1,64 +1,58 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM ==============================================================
-REM DayZ Web Panel - Start script (Windows 11)
-REM - Ensures dist build exists
-REM - Starts the Node server (serves SPA + API)
-REM
-REM Logs to ./data/logs/start-YYYYMMDD-HHMMSS.log
-REM ==============================================================
+rem --- Always run from project root (…\panel) ---
+cd /d "%~dp0\..\.."
+set "ROOT=%cd%"
 
-set ROOT=%~dp0..\..
-cd /d "%ROOT%"
-
-REM --- basic sanity ---
-if not exist "package.json" (
-  echo ERROR: package.json not found. Please run from the project root.
+rem --- Validate root ---
+if not exist "%ROOT%\package.json" (
+  echo [FATAL] package.json not found. Root: "%ROOT%"
+  pause
   exit /b 2
 )
 
-if not exist "data/logs" mkdir "data/logs"
+rem --- Logs ---
+set "LOG_DIR=%ROOT%\data\logs"
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
 
-REM --- locale-safe timestamp (avoids Turkish date formats breaking filenames) ---
-for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set TS=%%i
-set LOGFILE=data\logs\start-%TS%.log
+for /f "delims=" %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set "TS=%%i"
+set "LOG_FILE=%LOG_DIR%\start-%TS%.log"
 
 call :log "=== DayZ Web Panel Start ==="
+call :log "Root: %ROOT%"
 
-REM --- verify node_modules ---
-if not exist "node_modules" (
-  call :log "ERROR: node_modules not found. Run scripts\\windows\\install.bat first."
-  exit /b 20
-)
-
-REM --- verify DB client (Prisma) ---
 call :log "Ensuring Prisma client + DB schema (db:setup)..."
-npm run db:setup >>"%LOGFILE%" 2>&1
-if errorlevel 1 (
-  call :log "ERROR: db:setup failed. See log: %LOGFILE%"
-  exit /b 22
-)
+call npm run db:setup >> "%LOG_FILE%" 2>&1
+if errorlevel 1 goto :error
 
-REM --- verify build ---
-if not exist "dist/server/node-build.mjs" (
-  call :log "dist not found. Running build..."
-  npm run build >>"%LOGFILE%" 2>&1
-  if errorlevel 1 (
-    call :log "ERROR: build failed. See log: %LOGFILE%"
-    exit /b 21
-  )
+call :log "Checking build output..."
+if not exist "%ROOT%\dist\server\node-build.mjs" (
+  call :log "Build not found. Running build..."
+  call npm run build >> "%LOG_FILE%" 2>&1
+  if errorlevel 1 goto :error
+) else (
+  call :log "Build exists. Skipping build."
 )
 
 call :log "Starting server..."
-node dist/server/node-build.mjs >>"%LOGFILE%" 2>&1
+node "%ROOT%\dist\server\node-build.mjs" >> "%LOG_FILE%" 2>&1
 
-REM If node exits, we log the exit code
-set EXITCODE=%errorlevel%
-call :log "Server exited with code %EXITCODE%"
-exit /b %EXITCODE%
+set "CODE=%errorlevel%"
+call :log "Server process exited with code %CODE%."
+pause
+exit /b %CODE%
+
+:error
+set "CODE=%errorlevel%"
+call :log "ERROR: start failed with code %CODE%."
+call :log "Log file: %LOG_FILE%"
+echo.
+echo Start failed. Log: %LOG_FILE%
+pause
+exit /b %CODE%
 
 :log
-echo [%date% %time%] %~1
-echo [%date% %time%] %~1>>"%LOGFILE%"
+echo [%date% %time%] %~1>> "%LOG_FILE%"
+echo %~1
 exit /b 0

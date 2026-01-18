@@ -7,8 +7,10 @@
  */
 export const ErrorCodes = {
   // General
+ // General
   UNKNOWN: "E_UNKNOWN",
   VALIDATION: "E_VALIDATION",
+  DEPENDENCY_MISSING: "E_DEPENDENCY_MISSING",
 
   // Settings / config
   SETTINGS_NOT_CONFIGURED: "E_SETTINGS_NOT_CONFIGURED",
