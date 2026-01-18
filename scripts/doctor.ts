@@ -38,6 +38,7 @@ async function checkPrismaClient() {
 }
 
 async function checkDatabase() {
+  // Use dynamic import so missing Prisma client doesn't crash the doctor script.
   try {
     const { getPrisma } = await import("../server/db/prisma");
     const prisma = getPrisma();
