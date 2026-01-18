@@ -1,0 +1,61 @@
+// Prisma schema for DayZ Web Panel
+// - SQLite local DB (Windows friendly)
+// - Designed to be extensible for multiple server instances later
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // NOTE: schema.prisma lives under /prisma, so we use ../data/... to place the DB at repoRoot/data
+  url      = env("DATABASE_URL")
+}
+
+model Setting {
+  /// Unique config key (e.g. "default.dayzPath", "default.steamcmdPath")
+  key       String   @id
+  /// Value stored as string (JSON allowed)
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Mod {
+  id           Int      @id @default(autoincrement())
+  /// Steam Workshop published file id
+  workshopId   String   @unique
+  name         String?
+  description  String?
+  sizeBytes    Int?
+  lastUpdateTs Int?     // unix timestamp (best-effort)
+
+  /// Whether this mod should be included in the server launch parameter list
+  enabled      Boolean  @default(false)
+
+  /// Best-effort detected installation path (e.g. .../steamapps/workshop/content/221100/<id>)
+  installedPath String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ActionLog {
+  id        Int      @id @default(autoincrement())
+  at        DateTime @default(now())
+  /// Optional username / source (future: auth)
+  actor     String? 
+  /// Logical action type (e.g. "MOD_ENABLE", "SERVER_START")
+  action    String
+  /// JSON string for structured details
+  details   String?
+}
+
+model ErrorLog {
+  id        Int      @id @default(autoincrement())
+  at        DateTime @default(now())
+  /// Stable error code used by UI + logs
+  code      String
+  message   String
+  stack     String?
+  context   String?
+}
