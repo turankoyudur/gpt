@@ -16,13 +16,12 @@ const distPath = path.resolve(__dirname, "../spa");
 // Static dosyaları servis et
 app.use(express.static(distPath));
 
-// React Router fallback (API rotaları hariç)
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-    return res.status(404).json({ error: "API endpoint not found" });
-  }
+/// SPA fallback: API/health HARIC her şeyi index.html'e düşür
+app.get(/^\/(?!api\/|health).*/, (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
+
+// İstersen health'i ayrıca bırak (zaten API router varsa şart değil)
 
 app.listen(port, () => {
   // Konsolda görünmesi önemli: start.bat loglarında da görürsün
