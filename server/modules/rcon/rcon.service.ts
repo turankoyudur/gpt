@@ -1,3 +1,4 @@
+import { createRequire } from "module";
 import { AppError, ErrorCodes } from "../../core/errors";
 import { getLogger } from "../../core/logger";
 import { getPrisma } from "../../db/prisma";
@@ -238,13 +239,19 @@ async function loadBattleye() {
     const mod: any = await import("battleye");
     return mod?.default ?? mod;
   } catch (err) {
-    throw new AppError({
-      code: ErrorCodes.DEPENDENCY_MISSING,
-      status: 500,
-      message:
-        "BattlEye RCON library could not be loaded (npm package: battleye). Reinstall dependencies or switch to a supported RCON library.",
-      cause: err,
-    });
+    try {
+      const require = createRequire(import.meta.url);
+      const mod: any = require("battleye");
+      return mod?.default ?? mod;
+    } catch (err2) {
+      throw new AppError({
+        code: ErrorCodes.DEPENDENCY_MISSING,
+        status: 500,
+        message:
+          "BattlEye RCON library could not be loaded (npm package: battleye). Reinstall dependencies or switch to a supported RCON library.",
+        cause: err2 ?? err,
+      });
+    }
   }
 }
 
