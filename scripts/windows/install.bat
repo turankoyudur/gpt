@@ -72,7 +72,7 @@ if not exist ".env" (
 
 REM --- install deps ---
 call :log "Installing npm dependencies..."
-npm install >>"%LOGFILE%" 2>&1
+call npm install >>"%LOGFILE%" 2>&1
 if errorlevel 1 (
   call :log "ERROR: npm install failed. See log: %LOGFILE%"
   exit /b 14
@@ -80,7 +80,7 @@ if errorlevel 1 (
 
 REM --- init DB ---
 call :log "Initializing DB (prisma generate + db push)..."
-npm run db:setup >>"%LOGFILE%" 2>&1
+call npm run db:setup >>"%LOGFILE%" 2>&1
 if errorlevel 1 (
   call :log "ERROR: DB init failed. See log: %LOGFILE%"
   exit /b 15
@@ -88,7 +88,7 @@ if errorlevel 1 (
 
 REM --- build ---
 call :log "Building (client + server)..."
-npm run build >>"%LOGFILE%" 2>&1
+call npm run build >>"%LOGFILE%" 2>&1
 if errorlevel 1 (
   call :log "ERROR: Build failed. See log: %LOGFILE%"
   exit /b 16
