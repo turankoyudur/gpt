@@ -5,8 +5,16 @@ import { getLogger } from "../../core/logger";
 import { getPrisma } from "../../db/prisma";
 import { SettingsService } from "../settings/settings.service";
 
-type BattleyeSocket = any;
-type BattleyeConnection = any;
+type RconClient = {
+  on?: (event: string, handler: (...args: any[]) => void) => void;
+  once?: (event: string, handler: (...args: any[]) => void) => void;
+  off?: (event: string, handler: (...args: any[]) => void) => void;
+  connect?: () => Promise<void> | void;
+  disconnect?: () => void;
+  close?: () => void;
+  command?: (cmd: string) => Promise<any>;
+  send?: (cmd: string) => Promise<any>;
+};
 
 /**
  * RconService
@@ -17,8 +25,7 @@ type BattleyeConnection = any;
  * - Instead, credentials are stored in DB Settings and entered via Web UI.
  */
 export class RconService {
-  private static socket: BattleyeSocket | null = null;
-  private static connection: BattleyeConnection | null = null;
+  private static client: RconClient | null = null;
   private static connected = false;
   private static lastMessages: string[] = [];
 
@@ -38,14 +45,14 @@ export class RconService {
    *
    * Safe behavior:
    * - If credentials are missing -> throws SETTINGS_NOT_CONFIGURED (400)
-   * - If the battleye npm package cannot be loaded -> throws DEPENDENCY_MISSING (500)
+   * - If the battle-node-v2 npm package cannot be loaded -> throws DEPENDENCY_MISSING (500)
    * - Never crashes the whole app; errors are wrapped as AppError with stable error codes.
    */
   async connect() {
-    if (RconService.connection && RconService.connected) {
+    if (RconService.client && RconService.connected) {
       return { ok: true, alreadyConnected: true, ...this.status() };
     }
-    if (RconService.connection && !RconService.connected) {
+    if (RconService.client && !RconService.connected) {
       await this.disconnect();
     }
 
@@ -63,55 +70,25 @@ export class RconService {
       });
     }
 
-    const battleye = await loadBattleye();
+    const battleNode = await loadBattleye();
+    const client = createBattleNodeClient(battleNode, { ip, port, password });
 
-    // Client-side socket port. If you run multiple connections later, make this configurable.
-    const listenPort = 2310;
-    const socket = new battleye.Socket({ port: listenPort, ip: "0.0.0.0" });
-
-    // Create connection with keepalive and reconnect enabled.
-    const conn = socket.connection(
-      {
-        name: "dayz-server",
-        password,
-        ip,
-        port,
-      },
-      {
-        reconnect: true,
-        keepAlive: true,
-        keepAliveInterval: 15000,
-        timeout: true,
-        serverTimeout: 30000,
-      },
-    );
-
-    socket.on("received", (_resolved: any, packet: any) => {
-      pushMessage(`received packet: ${safeJson(packet)}`);
-    });
-    socket.on("sent", (packet: any) => {
-      pushMessage(`sent packet: ${safeJson(packet)}`);
-    });
-    socket.on("error", (err: any) => {
-      pushMessage(`socket error: ${String(err?.message ?? err)}`);
-    });
-
-    conn.on("message", (message: string) => {
+    client.on?.("message", (message: string) => {
       // Server messages (chat, joins, etc.) show up here.
       pushMessage(message);
     });
 
-    conn.on("connected", () => {
+    client.on?.("connected", () => {
       RconService.connected = true;
       pushMessage("connected");
       this.log.info("RCON connected", { code: "RCON_CONNECTED", context: { ip, port } });
     });
-    conn.on("disconnected", (reason: any) => {
+    client.on?.("disconnected", (reason: any) => {
       RconService.connected = false;
       pushMessage(`disconnected: ${safeJson(reason)}`);
       this.log.warn("RCON disconnected", { code: "RCON_DISCONNECTED", context: { reason } });
     });
-    conn.on("error", (err: any) => {
+    client.on?.("error", (err: any) => {
       RconService.connected = false;
       pushMessage(`connection error: ${String(err?.message ?? err)}`);
       this.log.warn("RCON connection error", {
@@ -120,12 +97,18 @@ export class RconService {
       });
     });
 
-    RconService.socket = socket;
-    RconService.connection = conn;
+    RconService.client = client;
     RconService.connected = false;
 
     try {
-      await waitForConnection(conn);
+      if (client.connect) {
+        await client.connect();
+      }
+      if (!client.once && !client.on) {
+        RconService.connected = true;
+      } else {
+        await waitForConnection(client);
+      }
     } catch (err) {
       await this.disconnect();
       throw new AppError({
@@ -145,19 +128,17 @@ export class RconService {
    * This should never throw; the panel should keep running even if the adapter behaves weirdly.
    */
   async disconnect() {
-    const sock = RconService.socket;
-    const conn = RconService.connection;
-    RconService.connection = null;
-    RconService.socket = null;
+    const client = RconService.client;
+    RconService.client = null;
     RconService.connected = false;
 
     try {
-      conn?.disconnect?.();
+      client?.disconnect?.();
     } catch {
       // ignore
     }
     try {
-      sock?.close?.();
+      client?.close?.();
     } catch {
       // ignore
     }
@@ -168,10 +149,10 @@ export class RconService {
    * Sends a command. If not connected, tries to connect first.
    */
   async command(cmd: string) {
-    if (!RconService.connection || !RconService.connected) {
+    if (!RconService.client || !RconService.connected) {
       await this.connect();
     }
-    if (!RconService.connection || !RconService.connected) {
+    if (!RconService.client || !RconService.connected) {
       throw new AppError({
         code: ErrorCodes.RCON_NOT_CONNECTED,
         status: 400,
@@ -180,7 +161,15 @@ export class RconService {
     }
 
     try {
-      const resp = await RconService.connection.command(cmd);
+      const client = RconService.client;
+      if (!client?.command && !client?.send) {
+        throw new AppError({
+          code: ErrorCodes.DEPENDENCY_MISSING,
+          status: 500,
+          message: "BattlEye RCON client does not support command execution.",
+        });
+      }
+      const resp = await (client?.command?.(cmd) ?? client?.send?.(cmd));
       pushMessage(`> ${cmd}`);
       pushMessage(resp?.data ?? safeJson(resp));
       return { ok: true, response: resp?.data ?? resp };
@@ -237,24 +226,24 @@ async function loadBattleye() {
   try {
     // Some environments ship battleye as CommonJS, some as ESM.
     // Dynamic import handles both.
-    const mod: any = await import("battleye");
+    const mod: any = await import("battle-node-v2");
     return mod?.default ?? mod;
   } catch (err) {
     try {
       const require = createRequire(import.meta.url);
-      const mod: any = require("battleye");
+      const mod: any = require("battle-node-v2");
       return mod?.default ?? mod;
     } catch (err2) {
       try {
         const require = createRequire(path.join(process.cwd(), "package.json"));
-        const mod: any = require("battleye");
+        const mod: any = require("battle-node-v2");
         return mod?.default ?? mod;
       } catch (err3) {
         throw new AppError({
           code: ErrorCodes.DEPENDENCY_MISSING,
           status: 500,
           message:
-            "BattlEye RCON library could not be loaded (npm package: battleye). Reinstall dependencies or switch to a supported RCON library.",
+            "BattlEye RCON library could not be loaded (npm package: battle-node-v2). Reinstall dependencies or switch to a supported RCON library.",
           cause: err3 ?? err2 ?? err,
           context: {
             cwd: process.cwd(),
@@ -268,7 +257,23 @@ async function loadBattleye() {
   }
 }
 
-async function waitForConnection(conn: BattleyeConnection, timeoutMs = 10000) {
+function createBattleNodeClient(mod: any, opts: { ip: string; port: number; password: string }): RconClient {
+  const Candidate =
+    mod?.BattleNode ??
+    mod?.BattleNodeClient ??
+    mod?.Rcon ??
+    mod?.default ??
+    mod;
+  if (typeof Candidate === "function") {
+    return new Candidate(opts);
+  }
+  if (Candidate?.Client && typeof Candidate.Client === "function") {
+    return new Candidate.Client(opts);
+  }
+  throw new Error("Unsupported battle-node-v2 export");
+}
+
+async function waitForConnection(conn: RconClient, timeoutMs = 10000) {
   await new Promise<void>((resolve, reject) => {
     let settled = false;
     const timeout = setTimeout(() => {
@@ -277,6 +282,13 @@ async function waitForConnection(conn: BattleyeConnection, timeoutMs = 10000) {
       cleanup();
       reject(new Error("RCON connection timed out"));
     }, timeoutMs);
+
+    const addListener = conn.once ?? conn.on;
+    if (!addListener) {
+      clearTimeout(timeout);
+      resolve();
+      return;
+    }
 
     const onConnected = () => {
       if (settled) return;
@@ -304,8 +316,8 @@ async function waitForConnection(conn: BattleyeConnection, timeoutMs = 10000) {
       conn.off?.("disconnected", onDisconnected);
     };
 
-    conn.once?.("connected", onConnected);
-    conn.once?.("error", onError);
-    conn.once?.("disconnected", onDisconnected);
+    addListener.call(conn, "connected", onConnected);
+    addListener.call(conn, "error", onError);
+    addListener.call(conn, "disconnected", onDisconnected);
   });
 }

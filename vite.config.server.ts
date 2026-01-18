@@ -42,7 +42,7 @@ export default defineConfig({
         // Prisma + native/dynamic stuff (bundle içine alınmasın)
         "@prisma/client",
         "prisma",
-        "battleye",
+        "battle-node-v2",
       ],
       output: {
         format: "es",
