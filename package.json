@@ -19,6 +19,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:setup": "npm run db:generate && npm run db:push",
+    "doctor": "tsx scripts/doctor.ts",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
     "typecheck": "tsc"
