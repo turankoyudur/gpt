@@ -38,10 +38,11 @@ async function checkPrismaClient() {
 }
 
 async function checkDatabase() {
-  // Use dynamic import so missing Prisma client doesn't crash the doctor script.
   try {
+    // Dinamik import: prisma generate yoksa bile doctor script tamamen patlamasın
     const { getPrisma } = await import("../server/db/prisma");
     const prisma = getPrisma();
+
     try {
       await prisma.$queryRaw`SELECT 1`;
       record("Database", "ok", "Connection succeeded.");
@@ -70,29 +71,32 @@ async function checkDistOutput() {
 
 async function checkSettings() {
   try {
+    // Dinamik import: DB hazır değilse bile doctor çalışsın
     const [{ getPrisma }, { SettingsService }] = await Promise.all([
       import("../server/db/prisma"),
       import("../server/modules/settings/settings.service"),
     ]);
+
     const prisma = getPrisma();
     const settings = new SettingsService(prisma);
+
     try {
       const current = await settings.get();
       const checks = [
         {
           label: "SteamCMD path",
           value: current.steamcmdPath,
-          exists: fs.existsSync(current.steamcmdPath),
+          exists: current.steamcmdPath ? fs.existsSync(current.steamcmdPath) : false,
         },
         {
           label: "DayZ server path",
           value: current.dayzServerPath,
-          exists: fs.existsSync(current.dayzServerPath),
+          exists: current.dayzServerPath ? fs.existsSync(current.dayzServerPath) : false,
         },
         {
           label: "BattlEye cfg path",
           value: current.battleyeCfgPath,
-          exists: fs.existsSync(current.battleyeCfgPath),
+          exists: current.battleyeCfgPath ? fs.existsSync(current.battleyeCfgPath) : false,
         },
       ];
 
@@ -113,11 +117,7 @@ async function checkSettings() {
       await prisma.$disconnect();
     }
   } catch (error) {
-    record(
-      "Settings",
-      "fail",
-      `Settings check skipped: Prisma client unavailable. (${(error as Error).message})`,
-    );
+    record("Settings", "fail", `Settings check skipped: Prisma client unavailable. (${(error as Error).message})`);
   }
 }
 
@@ -155,9 +155,7 @@ async function run() {
   }
 
   const hasFailures = results.some((result) => result.status === "fail");
-  if (hasFailures) {
-    process.exit(1);
-  }
+  if (hasFailures) process.exit(1);
 }
 
 run();
