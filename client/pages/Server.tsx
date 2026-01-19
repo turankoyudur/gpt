@@ -3,6 +3,7 @@ import { api, apiPost } from "@/lib/http";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 type ServerStatus = {
   running: boolean;
@@ -11,9 +12,15 @@ type ServerStatus = {
   lastExit: { code: number | null; signal: string | null } | null;
 };
 
+type TailResp = {
+  file: string;
+  lines: string[];
+};
+
 export default function Server() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const logFile = "dayz-server-current.log";
 
   const status = useQuery({
     queryKey: ["server-status"],
@@ -49,6 +56,12 @@ export default function Server() {
   });
 
   const s = status.data;
+  const logTail = useQuery({
+    queryKey: ["logs-tail", logFile],
+    queryFn: () => api<TailResp>(`/logs/tail?file=${encodeURIComponent(logFile)}&lines=200`),
+    refetchInterval: 2000,
+    retry: false,
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -96,6 +109,28 @@ export default function Server() {
             Note: v0.1 uses a simple process supervisor. For production usage you can later run this panel as a Windows
             service and let it manage DayZ with scheduled restarts and health checks.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Server Monitor</CardTitle>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span
+              className={cn("h-2 w-2 rounded-full", s?.running ? "bg-emerald-500" : "bg-muted-foreground/40")}
+            />
+            <span>{s?.running ? "Live" : "Offline"}</span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            {logFile} • auto-refreshing every 2s
+          </div>
+          <pre className="text-xs bg-black/70 text-white rounded-lg p-4 overflow-auto max-h-[320px]">
+            {logTail.isError
+              ? "Log file not found yet. Start the server to begin streaming output."
+              : (logTail.data?.lines ?? []).join("\n")}
+          </pre>
         </CardContent>
       </Card>
     </div>
