@@ -140,6 +140,111 @@ export class ModsService {
       .map((d) => d.name);
     return { base, found };
   }
+
+  /**
+   * Searches the Steam Workshop for DayZ mods (best-effort, no auth).
+   */
+  async search(query: string) {
+    const trimmed = query.trim();
+    if (!trimmed) return { total: 0, results: [] as WorkshopSearchResult[] };
+
+    const resp = await axios.get("https://steamcommunity.com/workshop/browse/", {
+      params: {
+        appid: 221100,
+        searchtext: trimmed,
+        browsesort: "textsearch",
+        section: "readytouseitems",
+        actualsort: "textsearch",
+        json: 1,
+      },
+    });
+
+    const data = resp.data ?? {};
+    const rawResults = Array.isArray(data.results)
+      ? data.results
+      : Array.isArray(data.response?.results)
+        ? data.response.results
+        : [];
+
+    const results = rawResults.map((item: any) => ({
+      workshopId: String(item.publishedfileid ?? item.id ?? ""),
+      name: String(item.title ?? item.name ?? ""),
+      lastUpdateTs: toNumber(item.time_updated ?? item.time_updated?.toString()),
+      sizeBytes: toNumber(item.file_size ?? item.file_size?.toString()),
+      subscriptions: toNumber(item.subscriptions ?? item.subscriptions?.toString()),
+    }));
+
+    const total = toNumber(data.total ?? data.response?.total) ?? results.length;
+
+    return { total, results: results.filter((r) => r.workshopId) };
+  }
+
+  /**
+   * Imports all mods inside a Workshop collection and adds them to the DB.
+   */
+  async importCollection(collectionId: string) {
+    const ids = await fetchCollectionChildren(collectionId);
+    const results = await Promise.all(ids.map((id) => this.add(id)));
+    return { total: ids.length, added: results.length };
+  }
+
+  /**
+   * Refreshes metadata for all known mods.
+   */
+  async refreshMetadata() {
+    const mods = await this.db.mod.findMany();
+    const updated = await Promise.all(
+      mods.map(async (mod) => {
+        const meta = await fetchWorkshopDetails(mod.workshopId);
+        if (!meta) return null;
+        return this.db.mod.update({
+          where: { workshopId: mod.workshopId },
+          data: {
+            name: meta.name,
+            description: meta.description,
+            sizeBytes: meta.sizeBytes,
+            lastUpdateTs: meta.lastUpdateTs,
+          },
+        });
+      }),
+    );
+
+    return {
+      total: mods.length,
+      refreshed: updated.filter(Boolean).length,
+    };
+  }
+
+  /**
+   * Copies .bikey files from installed mods into the DayZ server keys folder.
+   */
+  async syncKeys() {
+    const s = await this.settings.get();
+    const mods = await this.db.mod.findMany({ where: { installedPath: { not: null } } });
+    const serverKeysPath = path.join(s.dayzServerPath, "keys");
+    ensureDir(serverKeysPath);
+
+    let copied = 0;
+    const missing: string[] = [];
+
+    for (const mod of mods) {
+      const installedPath = mod.installedPath ?? "";
+      const keysPath = path.join(installedPath, "keys");
+      if (!dirExists(keysPath)) {
+        missing.push(mod.workshopId);
+        continue;
+      }
+      const files = fs.readdirSync(keysPath).filter((file) => file.toLowerCase().endsWith(".bikey"));
+      for (const file of files) {
+        const src = path.join(keysPath, file);
+        const dest = path.join(serverKeysPath, file);
+        fs.copyFileSync(src, dest);
+        copied += 1;
+      }
+    }
+
+    return { copied, missing };
+  }
 }
 
 /**
@@ -172,6 +277,59 @@ async function fetchWorkshopDetails(workshopId: string) {
     return null;
   }
 }
+
+async function fetchCollectionChildren(collectionId: string) {
+  try {
+    const params = new URLSearchParams();
+    params.set("collectioncount", "1");
+    params.set("publishedfileids[0]", collectionId);
+
+    const resp = await axios.post(
+      "https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/",
+      params,
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
+    );
+
+    const details = resp.data?.response?.collectiondetails?.[0];
+    const children = Array.isArray(details?.children) ? details.children : [];
+    return children.map((child: any) => String(child?.publishedfileid ?? "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function toNumber(value: string | number | undefined | null) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function ensureDir(dir: string) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    // ignore
+  }
+}
+
+function dirExists(p: string) {
+  try {
+    return fs.existsSync(p) && fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+type WorkshopSearchResult = {
+  workshopId: string;
+  name: string;
+  lastUpdateTs?: number;
+  sizeBytes?: number;
+  subscriptions?: number;
+};
 
 function runProcess(command: string, args: string[]) {
   return new Promise<{ exitCode: number; stdout: string }>((resolve) => {

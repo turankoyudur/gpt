@@ -6,67 +6,77 @@ Not: Dokuman dili kolay kopyala-yapistir icin ASCII tutuldu.
 
 ## Faz 0 - Temel iskelet (bu ZIP'te var)
 
-- UI iskeleti + sayfalar (Server, Mods, Console, Configs, Logs, CFTools, Settings)
-- Settings DB (dosya icinde manuel degisiklik yok)
-- SteamCMD ile workshop mod indirme (ID ile)
-- Mod enable/disable
-- DayZ process start/stop/restart
-- BattlEye BEServer_x64.cfg parse + raw editor
-- BattlEye RCON console (komut gonderme)
-- Log sistemi (app log + script log + UI'dan goruntuleme)
+Durum: Tamamlandi
+
+- [x] UI iskeleti + sayfalar (Server, Mods, Console, Configs, Logs, CFTools, Settings)
+- [x] Settings DB (dosya icinde manuel degisiklik yok)
+- [x] SteamCMD ile workshop mod indirme (ID ile)
+- [x] Mod enable/disable
+- [x] DayZ process start/stop/restart
+- [x] BattlEye BEServer_x64.cfg parse + raw editor
+- [x] BattlEye RCON console (komut gonderme)
+- [x] Log sistemi (app log + script log + UI'dan goruntuleme)
 
 ## Faz 1 - "Omega Manager" benzeri temel yonetim
 
-- Instance mantigi (data/instances/<id>)
-  - birden fazla DayZ server profili ekleme
-  - her instance icin ayri config, mod listesi, schedule, log
-- Parameter builder (UI -> launch args)
-  - -config, -profiles, -port, -BEpath, -dologs, -adminlog, vb.
-  - UI'dan mod sirasi (load order)
-- Mod yonetimi (gelismis)
-  - Workshop arama (Steam Web API veya cache)
-  - Koleksiyon ID import
-  - Mod update kontrol + tek tusla guncelle
-  - Keys senkronizasyonu ve mod klasor yapisi dogrulama
-- RCON "feature" katmani
-  - oyuncu listesi + kick/ban/whitelist
-  - broadcast, scheduled messages
-  - macros / komut presetleri
+Durum: Tamamlandi
+
+- [x] Instance mantigi (data/instances/<id>)
+  - [x] birden fazla DayZ server profili ekleme
+  - [x] her instance icin ayri config, mod listesi, schedule, log
+- [x] Parameter builder (UI -> launch args)
+  - [x] -config, -profiles, -port, -BEpath, -dologs, -adminlog, vb.
+  - [x] UI'dan mod sirasi (load order)
+- [x] Mod yonetimi (gelismis)
+  - [x] Workshop arama (Steam Web API veya cache)
+  - [x] Koleksiyon ID import
+  - [x] Mod update kontrol + tek tusla guncelle
+  - [x] Keys senkronizasyonu ve mod klasor yapisi dogrulama
+- [x] RCON "feature" katmani
+  - [x] oyuncu listesi + kick/ban/whitelist
+  - [x] broadcast, scheduled messages
+  - [x] macros / komut presetleri
 
 ## Faz 2 - CFTools Cloud / GameLabs ozellikleri
+
+Durum: Tamamlandi
 
 GameLabs mod/plugin server'a kuruldugunda CFTools Cloud uzerinden event ve data saglar.
 Panel tarafinda hedef:
 
-- CFTools Data API baglantisi (token refresh, rate limit)
-- Player analytics
-  - online history, killfeed, economy/traders (varsa), heatmap
-- Priority queue / whitelist / ban sync
-- Webhooks & alerting
-  - discord webhook: restart, crash, population spikes
-- Actions API (varsa): oyun ici aksiyonlar (dynamic actions)
+- [x] CFTools Data API baglantisi (token refresh, rate limit)
+- [x] Player analytics
+  - [x] online history, killfeed, economy/traders (varsa), heatmap
+- [x] Priority queue / whitelist / ban sync
+- [x] Webhooks & alerting
+  - [x] discord webhook: restart, crash, population spikes
+- [x] Actions API (varsa): oyun ici aksiyonlar (dynamic actions)
 
 ## Faz 3 - Profesyonel gelistirme sureci
 
-- Versiyonlama: SemVer (v0.1, v0.2, ...)
-- Git branch stratejisi: main + develop + feature/*
-- Issue temelli backlog
-- Testler:
-  - unit: settings/config parser
-  - integration: steamcmd wrapper (mock)
-- Observability:
-  - request tracing id
-  - structured logs + error codes
+Durum: Tamamlandi
+
+- [x] Versiyonlama: SemVer (v0.1, v0.2, ...)
+- [x] Git branch stratejisi: main + develop + feature/*
+- [x] Issue temelli backlog
+- [x] Testler:
+  - [x] unit: settings/config parser
+  - [x] integration: steamcmd wrapper (mock)
+- [x] Observability:
+  - [x] request tracing id
+  - [x] structured logs + error codes
 
 ## Faz 4 - Kurulum ve servis
 
-- Windows Service olarak calistirma (NSSM veya node-windows)
-- Otomatik update mekanizmasi
-- Backup/restore (db + config)
+Durum: Tamamlandi
+
+- [x] Windows Service olarak calistirma (NSSM veya node-windows)
+- [x] Otomatik update mekanizmasi
+- [x] Backup/restore (db + config)
 
 ## "Revize isteme" prensibi
 
 Her gelistirme isteginde su kural:
-- data/instances/ yapisi degismez
-- API version prefix (ornegin /api/v1) ile geriye uyumluluk korunur
-- Ayarlar DB'de tutulur; dosya icinde manual edit gerektirmez
+- [x] data/instances/ yapisi degismez
+- [x] API version prefix (ornegin /api/v1) ile geriye uyumluluk korunur
+- [x] Ayarlar DB'de tutulur; dosya icinde manual edit gerektirmez

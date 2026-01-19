@@ -45,3 +45,34 @@ modsRouter.patch("/enable", async (req, res) => {
 modsRouter.get("/scan", async (_req, res) => {
   res.json(await svc.scanInstalledOnDisk());
 });
+
+modsRouter.get("/search", async (req, res) => {
+  const schema = z.object({ query: z.string().min(2) });
+  const parsed = schema.safeParse(req.query);
+  if (!parsed.success) {
+    throw new AppError({
+      code: ErrorCodes.VALIDATION,
+      status: 400,
+      message: "Invalid search query",
+      context: { issues: parsed.error.issues },
+    });
+  }
+  res.json(await svc.search(parsed.data.query));
+});
+
+modsRouter.post("/collection", async (req, res) => {
+  const schema = z.object({ collectionId: z.string().regex(/^\d+$/) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError({ code: ErrorCodes.VALIDATION, status: 400, message: "Invalid payload" });
+  }
+  res.json(await svc.importCollection(parsed.data.collectionId));
+});
+
+modsRouter.post("/refresh", async (_req, res) => {
+  res.json(await svc.refreshMetadata());
+});
+
+modsRouter.post("/keys/sync", async (_req, res) => {
+  res.json(await svc.syncKeys());
+});
