@@ -174,8 +174,29 @@ export class ServerControlService {
     if (!proc) return { ok: true, alreadyStopped: true };
 
     try {
+      let requestedShutdown = false;
+
+      try {
+        const res = await this.rcon.command("#shutdown");
+        requestedShutdown = true;
+        this.log.info("RCON shutdown command sent", {
+          code: "RCON_SHUTDOWN_SENT",
+          context: { response: res?.response ?? res },
+        });
+      } catch (err) {
+        this.log.warn("RCON shutdown command failed", {
+          code: ErrorCodes.RCON_COMMAND_FAILED,
+          context: { message: (err as any)?.message ?? String(err) },
+        });
+      }
+
+      if (requestedShutdown) {
+        const graceful = await waitForExit(proc, 10000);
+        if (graceful) return { ok: true, graceful: true };
+      }
+
       proc.kill();
-      return { ok: true };
+      return { ok: true, graceful: false };
     } catch (err) {
       throw new AppError({
         code: ErrorCodes.SERVER_PROCESS_STOP_FAILED,
@@ -196,6 +217,26 @@ export class ServerControlService {
 
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function waitForExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number) {
+  return new Promise<boolean>((resolve) => {
+    let resolved = false;
+    const onClose = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      proc.off("close", onClose);
+      resolve(false);
+    }, timeoutMs);
+
+    proc.once("close", onClose);
+  });
 }
 
 /**
