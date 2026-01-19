@@ -9,14 +9,46 @@ import type { DbClient } from "../../db/prisma";
  *
  * We keep settings schema-driven so we can validate and evolve safely.
  */
+const isWindows = process.platform === "win32";
+const windowsRoot = "E:\\steamcmd";
+const linuxRoot = "/opt/steamcmd";
+
+const defaultPaths = isWindows
+  ? {
+      steamcmdPath: path.win32.join(windowsRoot, "steamcmd.exe"),
+      dayzServerPath: path.win32.join(windowsRoot, "steamapps", "common", "DayZServer"),
+      profilesPath: path.win32.join(windowsRoot, "steamapps", "common", "DayZServer", "profiles"),
+      battleyeCfgPath: path.win32.join(
+        windowsRoot,
+        "steamapps",
+        "common",
+        "DayZServer",
+        "profiles",
+        "BattlEye",
+        "BEServer_x64.cfg",
+      ),
+    }
+  : {
+      steamcmdPath: path.posix.join(linuxRoot, "steamcmd.sh"),
+      dayzServerPath: path.posix.join(linuxRoot, "steamapps", "common", "DayZServer"),
+      profilesPath: path.posix.join(linuxRoot, "steamapps", "common", "DayZServer", "profiles"),
+      battleyeCfgPath: path.posix.join(
+        linuxRoot,
+        "steamapps",
+        "common",
+        "DayZServer",
+        "profiles",
+        "BattlEye",
+        "BEServer_x64.cfg",
+      ),
+    };
+
 export const instanceSettingsSchema = z.object({
   // Core paths
-  steamcmdPath: z.string().min(1).default("E:\\steamcmd\\steamcmd.exe"),
-  dayzServerPath: z.string().min(1).default("E:\\steamcmd\\steamapps\\common\\DayZServer"),
-  profilesPath: z.string().min(1).default("E:\\steamcmd\\steamapps\\common\\DayZServer\\profiles"),
-  battleyeCfgPath: z.string().min(1).default(
-    "E:\\steamcmd\\steamapps\\common\\DayZServer\\profiles\\BattlEye\\BEServer_x64.cfg",
-  ),
+  steamcmdPath: z.string().min(1).default(defaultPaths.steamcmdPath),
+  dayzServerPath: z.string().min(1).default(defaultPaths.dayzServerPath),
+  profilesPath: z.string().min(1).default(defaultPaths.profilesPath),
+  battleyeCfgPath: z.string().min(1).default(defaultPaths.battleyeCfgPath),
 
   // RCON (BattlEye)
   // NOTE:
@@ -97,16 +129,18 @@ export class SettingsService {
    */
   async getDayzExecutablePath() {
     const s = await this.get();
-    const exe = path.join(s.dayzServerPath, "DayZServer_x64.exe");
-    if (!fileExists(exe)) {
-      throw new AppError({
-        code: ErrorCodes.FILE_NOT_FOUND,
-        status: 400,
-        message: "DayZServer_x64.exe not found. Check your DayZ server path in Settings.",
-        context: { exe },
-      });
+    const candidates =
+      process.platform === "win32" ? ["DayZServer_x64.exe"] : ["DayZServer_x64", "DayZServer"];
+    for (const candidate of candidates) {
+      const exe = path.join(s.dayzServerPath, candidate);
+      if (fileExists(exe)) return exe;
     }
-    return exe;
+    throw new AppError({
+      code: ErrorCodes.FILE_NOT_FOUND,
+      status: 400,
+      message: `DayZ server executable not found. Expected ${candidates.join(" or ")}.`,
+      context: { dayzServerPath: s.dayzServerPath },
+    });
   }
 }
 

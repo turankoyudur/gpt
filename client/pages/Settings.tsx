@@ -92,7 +92,7 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Paths (Windows)</CardTitle>
+          <CardTitle>Paths (Windows/Linux)</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="SteamCMD Path" value={form.steamcmdPath} onChange={(v) => update("steamcmdPath", v)} />
