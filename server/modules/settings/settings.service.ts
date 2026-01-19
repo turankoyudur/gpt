@@ -62,7 +62,10 @@ export const instanceSettingsSchema = z.object({
   // Launch params (stored as key/value and compiled into CLI args)
   serverPort: z.coerce.number().int().positive().default(2302),
   serverConfigFile: z.string().min(1).default("serverDZ.cfg"),
-  additionalLaunchArgs: z.string().optional().default(""),
+  additionalLaunchArgs: z
+    .string()
+    .optional()
+    .default("dologs -adminlog -netlog -freezecheck"),
 
   // Steam login (optional; workshop downloads often require an account)
   steamUser: z.string().optional().default("") ,
