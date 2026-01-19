@@ -1,0 +1,19 @@
+export type SettingsModel = {
+  steamcmdPath: string;
+  dayzServerPath: string;
+  profilesPath: string;
+  battleyeCfgPath: string;
+  rconHost: string;
+  rconPort: number;
+  rconPassword: string;
+  rconAutoConnect: boolean;
+  serverConfigFile: string;
+  serverPort: number;
+  additionalLaunchArgs: string;
+  steamUser: string;
+  steamPassword: string;
+  cftoolsServerApiId: string;
+  cftoolsAppId: string;
+  cftoolsSecret: string;
+  cftoolsEnterpriseKey: string;
+};
