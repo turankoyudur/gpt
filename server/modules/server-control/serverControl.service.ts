@@ -71,7 +71,7 @@ export class ServerControlService {
     // Spawn DayZ server process
     const child = spawn(exe, args, {
       cwd: s.dayzServerPath,
-      windowsHide: true,
+      windowsHide: process.platform === "win32",
     });
 
     ServerControlService.proc = child;
@@ -277,7 +277,11 @@ async function ensureJunctionsForMods(args: {
     // We attempt to create the junction using a Windows command.
     // This is best-effort and does not crash the server start.
     try {
-      await runCmd(["cmd", "/c", "mklink", "/J", linkPath, mod.installedPath]);
+      if (process.platform === "win32") {
+        await runCmd(["cmd", "/c", "mklink", "/J", linkPath, mod.installedPath]);
+      } else {
+        await fs.promises.symlink(mod.installedPath, linkPath);
+      }
     } catch {
       // ignore - non-fatal
     }
@@ -286,7 +290,7 @@ async function ensureJunctionsForMods(args: {
 
 function runCmd(cmd: string[]) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(cmd[0], cmd.slice(1), { windowsHide: true });
+    const child = spawn(cmd[0], cmd.slice(1), { windowsHide: process.platform === "win32" });
     child.on("close", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`Command failed: ${cmd.join(" ")}`));

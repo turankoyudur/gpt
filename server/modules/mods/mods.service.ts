@@ -67,7 +67,7 @@ export class ModsService {
       throw new AppError({
         code: ErrorCodes.STEAMCMD_NOT_FOUND,
         status: 400,
-        message: "steamcmd.exe not found. Please set SteamCMD path in Settings.",
+        message: "SteamCMD not found. Please set the correct SteamCMD path in Settings.",
         context: { steamcmdPath: s.steamcmdPath },
       });
     }
@@ -176,7 +176,7 @@ async function fetchWorkshopDetails(workshopId: string) {
 function runProcess(command: string, args: string[]) {
   return new Promise<{ exitCode: number; stdout: string }>((resolve) => {
     const child = spawn(command, args, {
-      windowsHide: true,
+      windowsHide: process.platform === "win32",
     });
     let stdout = "";
     child.stdout.on("data", (d) => (stdout += d.toString()));

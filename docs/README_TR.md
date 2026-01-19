@@ -1,20 +1,26 @@
-# DayZ Web Panel — Windows 11 Kurulum Rehberi (TR)
+# DayZ Web Panel — Kurulum Rehberi (TR)
 
-Bu dokuman, Windows 11 uzerinde panelin kurulumu, baslatilmasi ve sorun giderme adimlarini icerir.
+Bu dokuman, Windows 11 ve Linux uzerinde panelin kurulumu, baslatilmasi ve sorun giderme adimlarini icerir.
 
 ## 1) Onkosullar
-- Windows 11
+- Windows 11 veya Linux
 - Internet erisimi (SteamCMD, npm paketleri icin)
 - Diskte yeterli alan (DayZ server + modlar icin)
 
 ## 2) Varsayilan yollar
 UI tarafindan degistirilebilir, ancak varsayilanlar:
-- DayZ server: `E:\steamcmd\steamapps\common\DayZServer`
-- SteamCMD: `E:\steamcmd\steamcmd.exe`
-- BattlEye cfg: `E:\steamcmd\steamapps\common\DayZServer\profiles\BattlEye\BEServer_x64.cfg`
-- BattlEye profiles: `E:\steamcmd\steamapps\common\DayZServer\profiles\BattlEye`
+- Windows:
+  - DayZ server: `E:\steamcmd\steamapps\common\DayZServer`
+  - SteamCMD: `E:\steamcmd\steamcmd.exe`
+  - BattlEye cfg: `E:\steamcmd\steamapps\common\DayZServer\profiles\BattlEye\BEServer_x64.cfg`
+  - BattlEye profiles: `E:\steamcmd\steamapps\common\DayZServer\profiles\BattlEye`
+- Linux:
+  - DayZ server: `/opt/steamcmd/steamapps/common/DayZServer`
+  - SteamCMD: `/opt/steamcmd/steamcmd.sh`
+  - BattlEye cfg: `/opt/steamcmd/steamapps/common/DayZServer/profiles/BattlEye/BEServer_x64.cfg`
+  - BattlEye profiles: `/opt/steamcmd/steamapps/common/DayZServer/profiles/BattlEye`
 
-## 3) Kurulum
+## 3) Kurulum (Windows 11)
 PowerShell ya da CMD uzerinden:
 
 ```bat
@@ -28,7 +34,7 @@ Kurulum asamalari:
 - `npm run build`
 - Log: `data\logs\install-YYYYMMDD-HHMMSS.log`
 
-## 4) Baslatma
+## 4) Baslatma (Windows 11)
 
 ```bat
 scripts\windows\start.bat
@@ -45,7 +51,41 @@ Uygulama acildiginda:
 http://localhost:3000
 ```
 
-## 5) Doctor komutu
+## 5) Kurulum (Linux)
+
+Terminal uzerinden:
+
+```bash
+chmod +x scripts/linux/install.sh scripts/linux/start.sh
+scripts/linux/install.sh
+```
+
+Kurulum asamalari:
+- Node.js 22.x mevcut mu kontrol edilir
+- `pnpm install` (yoksa `npm install`)
+- `.env` yoksa `.env.example` kopyalanir
+- `db:setup`
+- `build`
+- Log: `data/logs/install-YYYYMMDD-HHMMSS.log`
+
+## 6) Baslatma (Linux)
+
+```bash
+scripts/linux/start.sh
+```
+
+Baslatma asamalari:
+- `db:setup`
+- Build yoksa `build`
+- Server baslatilir
+- Log: `data/logs/start-YYYYMMDD-HHMMSS.log`
+
+Uygulama acildiginda:
+```
+http://localhost:3000
+```
+
+## 7) Doctor komutu
 Sistem sagligini hizli kontrol etmek icin:
 
 ```bash
@@ -60,7 +100,7 @@ Kontroller:
 - Settings icinde SteamCMD / DayZ / BattlEye path’leri set mi
 - RCON dependency (battleye) sagligi
 
-## 6) Sorun Giderme (FAQ)
+## 8) Sorun Giderme (FAQ)
 
 ### A) Kurulum sirasinda npm komutlari yarida kesiliyor
 - Windows batch dosyalarinda `npm` komutlari `call npm ...` olarak calismalidir.
@@ -77,4 +117,3 @@ Kontroller:
 
 ### D) Ayar yollarini guncellemek
 UI uzerindeki Settings sayfasindan DayZ/SteamCMD/BattlEye pathlerini girip kaydedin.
-

@@ -7,9 +7,9 @@ Hedef: Omega Manager / CFTools Cloud benzeri bir deneyim sunmak; **SteamCMD**, *
 
 ## Mevcut sürümde (v0.1) neler var?
 
-- **Kurulum / çalıştırma BAT dosyaları** (loglu)
-  - `scripts/windows/install.bat`
-  - `scripts/windows/start.bat`
+- **Kurulum / çalıştırma scriptleri** (loglu)
+  - Windows: `scripts/windows/install.bat`, `scripts/windows/start.bat`
+  - Linux/Codex: `scripts/linux/install.sh`, `scripts/linux/start.sh`
 - **SQLite lokal DB** (Prisma)
   - Ayarlar (DB’de), mod listesi, hata logları
 - **Settings ekranı**
@@ -23,7 +23,7 @@ Hedef: Omega Manager / CFTools Cloud benzeri bir deneyim sunmak; **SteamCMD**, *
   - Enable/Disable ile server start argümanına otomatik dahil etme
 - **Server kontrol**
   - Start / Stop / Restart
-  - Enable modlar için server klasörüne **Junction link (mklink /J)** oluşturma (Windows)
+  - Enable modlar için server klasörüne **Junction link (mklink /J)** (Windows) veya **symlink** (Linux) oluşturma
 - **BattlEye config editor**
   - `BEServer_x64.cfg` parse + raw edit
 - **RCON Console**
@@ -56,6 +56,35 @@ Bu script:
    `http://localhost:3000`
 
 > Hem `install.bat` hem `start.bat` çıktıları `./data/logs/...` altına loglanır.
+
+## Kurulum (Linux / Codex)
+
+1. ZIP’i bir klasöre çıkar.
+2. Terminal aç ve aşağıdaki scriptleri çalıştır:
+
+   ```bash
+   chmod +x scripts/linux/install.sh scripts/linux/start.sh
+   scripts/linux/install.sh
+   ```
+
+Bu script:
+- Node.js 22.x mevcut mu kontrol eder
+- `pnpm install` (yoksa `npm install`)
+- `.env.example` -> `.env` kopyalar
+- DB’yi başlatır (`prisma db push`)
+- Build alır
+
+3. Ardından paneli başlat:
+
+   ```bash
+   scripts/linux/start.sh
+   ```
+
+4. Tarayıcıdan aç:
+
+   `http://localhost:3000`
+
+> Hem `install.sh` hem `start.sh` çıktıları `./data/logs/...` altına loglanır.
 
 ## GitHub'a yukleme (opsiyonel)
 
@@ -97,6 +126,9 @@ dayz-web-panel/
   scripts/windows/
     install.bat
     start.bat
+  scripts/linux/
+    install.sh
+    start.sh
 ```
 
 ## Mimari
