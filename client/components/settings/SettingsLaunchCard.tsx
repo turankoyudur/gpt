@@ -37,8 +37,12 @@ export default function SettingsLaunchCard({
             onChange={(event) =>
               onUpdate("additionalLaunchArgs", event.target.value)
             }
+            placeholder="dologs -adminlog -netlog -freezecheck"
             className="min-h-[120px] font-mono"
           />
+          <p className="text-xs text-muted-foreground">
+            Default recommended flags: dologs -adminlog -netlog -freezecheck
+          </p>
         </div>
       </CardContent>
     </Card>
