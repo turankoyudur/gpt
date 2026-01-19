@@ -39,7 +39,7 @@ async function checkPrismaClient() {
 
 async function checkDatabase() {
   try {
-    // Dinamik import: prisma generate yoksa bile doctor script tamamen patlamasın
+    // Dynamic import: allow doctor to run even when prisma generate hasn't been executed yet
     const { getPrisma } = await import("../server/db/prisma");
     const prisma = getPrisma();
 
@@ -71,7 +71,7 @@ async function checkDistOutput() {
 
 async function checkSettings() {
   try {
-    // Dinamik import: DB hazır değilse bile doctor çalışsın
+    // Dynamic import: allow doctor to run even when DB isn't ready
     const [{ getPrisma }, { SettingsService }] = await Promise.all([
       import("../server/db/prisma"),
       import("../server/modules/settings/settings.service"),
@@ -122,20 +122,41 @@ async function checkSettings() {
 }
 
 async function checkRconDependency() {
+  // Preferred package
+  const battleNodePath = path.join(process.cwd(), "node_modules", "battle-node-v2");
+  if (fs.existsSync(battleNodePath)) {
+    try {
+      const mod: any = await import("battle-node-v2");
+      const keys = Object.keys(mod ?? {});
+      record("RCON dependency", "ok", `battle-node-v2 import ok. Exports: ${keys.join(", ")}`);
+      return;
+    } catch (error) {
+      record(
+        "RCON dependency",
+        "warn",
+        `battle-node-v2 present but failed to import: ${(error as Error).message}`,
+      );
+      // Continue to check legacy
+    }
+  } else {
+    record("RCON dependency", "warn", "battle-node-v2 package not found in node_modules.");
+  }
+
+  // Legacy package (known to be broken in some installs)
   const battleyePath = path.join(process.cwd(), "node_modules", "battleye");
   if (!fs.existsSync(battleyePath)) {
-    record("RCON dependency", "warn", "battleye package not found in node_modules.");
+    record("RCON dependency (legacy)", "warn", "battleye package not found in node_modules.");
     return;
   }
 
   try {
     await import("battleye");
-    record("RCON dependency", "ok", "battleye package import succeeded.");
+    record("RCON dependency (legacy)", "ok", "battleye package import succeeded.");
   } catch (error) {
     record(
-      "RCON dependency",
+      "RCON dependency (legacy)",
       "warn",
-      `battleye package present but failed to import: ${(error as Error).message}`,
+      `battleye present but failed to import: ${(error as Error).message}`,
     );
   }
 }
