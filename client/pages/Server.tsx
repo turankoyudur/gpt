@@ -20,8 +20,6 @@ type TailResp = {
 export default function Server() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const logFile = "dayz-server-current.log";
-
   const status = useQuery({
     queryKey: ["server-status"],
     queryFn: () => api<ServerStatus>("/server/status"),
@@ -57,8 +55,8 @@ export default function Server() {
 
   const s = status.data;
   const logTail = useQuery({
-    queryKey: ["logs-tail", logFile],
-    queryFn: () => api<TailResp>(`/logs/tail?file=${encodeURIComponent(logFile)}&lines=200`),
+    queryKey: ["logs-rpt-latest"],
+    queryFn: () => api<TailResp>("/logs/rpt/latest?lines=200"),
     refetchInterval: 2000,
     retry: false,
   });
@@ -124,11 +122,11 @@ export default function Server() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="text-xs text-muted-foreground">
-            {logFile} • auto-refreshing every 2s
+            {logTail.data?.file ?? "DayZServer_x64*.RPT"} • auto-refreshing every 2s
           </div>
           <pre className="text-xs bg-black/70 text-white rounded-lg p-4 overflow-auto max-h-[320px]">
             {logTail.isError
-              ? "Log file not found yet. Start the server to begin streaming output."
+              ? "Latest RPT log not found yet. Start the server to generate a new report file."
               : (logTail.data?.lines ?? []).join("\n")}
           </pre>
         </CardContent>
