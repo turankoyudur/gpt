@@ -16,10 +16,25 @@ type Mod = {
   sizeBytes: number | null;
 };
 
+type WorkshopSearchResult = {
+  workshopId: string;
+  name: string;
+  lastUpdateTs?: number;
+  sizeBytes?: number;
+  subscriptions?: number;
+};
+
+type WorkshopSearchResponse = {
+  total: number;
+  results: WorkshopSearchResult[];
+};
+
 export default function Mods() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [workshopId, setWorkshopId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collectionId, setCollectionId] = useState("");
 
   const mods = useQuery({
     queryKey: ["mods"],
@@ -28,13 +43,30 @@ export default function Mods() {
   });
 
   const add = useMutation({
-    mutationFn: () => apiPost<Mod>("/mods/add", { workshopId }),
+    mutationFn: (id: string) => apiPost<Mod>("/mods/add", { workshopId: id }),
     onSuccess: () => {
       setWorkshopId("");
       qc.invalidateQueries({ queryKey: ["mods"] });
       toast({ title: "Mod added" });
     },
     onError: (e: any) => toast({ title: "Add failed", description: `${e.code ?? ""} ${e.message}` }),
+  });
+
+  const search = useQuery({
+    queryKey: ["mods-search", searchQuery],
+    queryFn: () => api<WorkshopSearchResponse>(`/mods/search?query=${encodeURIComponent(searchQuery)}`),
+    enabled: searchQuery.trim().length >= 2,
+  });
+
+  const importCollection = useMutation({
+    mutationFn: (id: string) => apiPost<{ total: number; added: number }>("/mods/collection", { collectionId: id }),
+    onSuccess: (data) => {
+      setCollectionId("");
+      qc.invalidateQueries({ queryKey: ["mods"] });
+      toast({ title: "Collection imported", description: `Added ${data.added}/${data.total} mods.` });
+    },
+    onError: (e: any) =>
+      toast({ title: "Collection import failed", description: `${e.code ?? ""} ${e.message}` }),
   });
 
   const install = useMutation({
@@ -60,6 +92,24 @@ export default function Mods() {
     onSuccess: () => toast({ title: "Scan complete" }),
   });
 
+  const refresh = useMutation({
+    mutationFn: () => apiPost<{ total: number; refreshed: number }>("/mods/refresh", {}),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["mods"] });
+      toast({ title: "Metadata refreshed", description: `${data.refreshed}/${data.total} updated.` });
+    },
+  });
+
+  const syncKeys = useMutation({
+    mutationFn: () => apiPost<{ copied: number; missing: string[] }>("/mods/keys/sync", {}),
+    onSuccess: (data) => {
+      toast({
+        title: "Keys synchronized",
+        description: `${data.copied} keys copied. Missing keys for ${data.missing.length} mods.`,
+      });
+    },
+  });
+
   const list = mods.data ?? [];
   const enabledCount = useMemo(() => list.filter((m) => m.enabled).length, [list]);
 
@@ -72,9 +122,17 @@ export default function Mods() {
             Add workshop mods by ID, install via SteamCMD, enable/disable for -mod launch parameter.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => scan.mutate()} disabled={scan.isPending}>
-          Scan Disk
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => scan.mutate()} disabled={scan.isPending}>
+            Scan Disk
+          </Button>
+          <Button variant="secondary" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+            Refresh Metadata
+          </Button>
+          <Button variant="secondary" onClick={() => syncKeys.mutate()} disabled={syncKeys.isPending}>
+            Sync Keys
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -87,12 +145,70 @@ export default function Mods() {
             value={workshopId}
             onChange={(e) => setWorkshopId(e.target.value)}
           />
-          <Button onClick={() => add.mutate()} disabled={!workshopId || add.isPending}>
+          <Button onClick={() => add.mutate(workshopId)} disabled={!workshopId || add.isPending}>
             Add
           </Button>
           <div className="text-xs text-muted-foreground md:ml-auto flex items-center">
             Enabled: {enabledCount}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Workshop Search</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-3">
+            <Input
+              placeholder="Search workshop mods"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            {search.isFetching && <div className="text-sm text-muted-foreground">Searching...</div>}
+            {(search.data?.results ?? []).map((item) => (
+              <div
+                key={item.workshopId}
+                className="flex flex-col md:flex-row md:items-center gap-2 border rounded-md p-3"
+              >
+                <div className="flex-1">
+                  <div className="font-medium">{item.name || `Workshop ${item.workshopId}`}</div>
+                  <div className="text-xs text-muted-foreground">
+                    ID: {item.workshopId}
+                    {item.lastUpdateTs ? ` • Updated ${new Date(item.lastUpdateTs * 1000).toLocaleString()}` : ""}
+                    {item.subscriptions ? ` • Subs ${item.subscriptions.toLocaleString()}` : ""}
+                  </div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => add.mutate(item.workshopId)}>
+                  Add
+                </Button>
+              </div>
+            ))}
+            {searchQuery.trim().length >= 2 && (search.data?.results?.length ?? 0) === 0 && !search.isFetching && (
+              <div className="text-sm text-muted-foreground">No results found.</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Collection Import</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row gap-3">
+          <Input
+            placeholder="Workshop Collection ID"
+            value={collectionId}
+            onChange={(e) => setCollectionId(e.target.value)}
+          />
+          <Button
+            onClick={() => importCollection.mutate(collectionId)}
+            disabled={!collectionId || importCollection.isPending}
+          >
+            Import Collection
+          </Button>
         </CardContent>
       </Card>
 
