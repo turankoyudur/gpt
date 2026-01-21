@@ -3,6 +3,7 @@ import path from "path";
 import { z } from "zod";
 import { AppError, ErrorCodes } from "../../core/errors";
 import type { DbClient } from "../../db/prisma";
+import { validateInstanceName } from "../../../shared/instanceName";
 
 /**
  * Settings live in the DB so the user doesn't need to manually edit project files.
@@ -44,6 +45,24 @@ const defaultPaths = isWindows
     };
 
 export const instanceSettingsSchema = z.object({
+  /**
+   * Logical instance name.
+   *
+   * Today we run a single server instance (instance:default in DB).
+   * In the next iterations we'll support multiple instances and this name
+   * becomes the instance identifier + folder name, so we validate it strictly.
+   */
+  instanceName: z
+    .preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().min(1))
+    .refine(
+      (value) => validateInstanceName(String(value)).ok,
+      (value) => {
+        const r = validateInstanceName(String(value));
+        return { message: r.ok ? "" : r.message };
+      },
+    )
+    .default("default"),
+
   // Core paths
   steamcmdPath: z.string().min(1).default(defaultPaths.steamcmdPath),
   dayzServerPath: z.string().min(1).default(defaultPaths.dayzServerPath),

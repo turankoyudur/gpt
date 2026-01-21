@@ -1,86 +1,113 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { api, apiPost } from "@/lib/http";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-type RconStatus = { connected: boolean; lastMessages: string[] };
+type Status = {
+  ok: boolean;
+  reason?: string;
+  apiBridgePath: string;
+};
 
 export default function Console() {
-  const qc = useQueryClient();
   const { toast } = useToast();
-  const [cmd, setCmd] = useState("help");
 
-  const status = useQuery({ queryKey: ["rcon-status"], queryFn: () => api<RconStatus>("/rcon/status"), refetchInterval: 2000 });
+  const [jsonText, setJsonText] = useState(() =>
+    JSON.stringify(
+      {
+        type: "teleport",
+        playerId: "STEAM64",
+        x: 7500,
+        y: 0,
+        z: 7500,
+      },
+      null,
+      2,
+    ),
+  );
 
-  const connect = useMutation({
-    mutationFn: () => apiPost<any>("/rcon/connect"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["rcon-status"] }),
-    onError: (e: any) => toast({ title: "RCON connect failed", description: `${e.code ?? ""} ${e.message}` }),
+  const statusM = useMutation({
+    mutationFn: () => api<Status>("/api/apibridge/status"),
   });
 
-  const disconnect = useMutation({
-    mutationFn: () => apiPost<any>("/rcon/disconnect"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["rcon-status"] }),
-  });
-
-  const send = useMutation({
-    mutationFn: () => apiPost<any>("/rcon/command", { cmd }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rcon-status"] });
-      setCmd("");
+  const sendM = useMutation({
+    mutationFn: async () => {
+      let body: unknown;
+      try {
+        body = JSON.parse(jsonText);
+      } catch (e) {
+        throw new Error("JSON parse failed: " + String(e));
+      }
+      return apiPost<{ ok: boolean; result: any }>("/api/apibridge/commands", body);
     },
-    onError: (e: any) => toast({ title: "Command failed", description: `${e.code ?? ""} ${e.message}` }),
+    onSuccess: (data) => {
+      toast({
+        title: "Komut gönderildi",
+        description: data?.result ? JSON.stringify(data.result) : "OK",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Komut hatası",
+        description: err?.message ?? String(err),
+        variant: "destructive",
+      });
+    },
   });
+
+  const parsed = useMemo(() => {
+    try {
+      JSON.parse(jsonText);
+      return { ok: true, error: "" };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }, [jsonText]);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">RCON Console</h2>
-          <p className="text-sm text-muted-foreground">Send BattlEye RCON commands. Messages are buffered locally.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => connect.mutate()} disabled={connect.isPending}>
-            Connect
-          </Button>
-          <Button variant="destructive" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
-            Disconnect
-          </Button>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Status</CardTitle>
+          <CardTitle>API Console (ApiBridge)</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm">
-          Connected: <span className="font-medium">{status.data?.connected ? "Yes" : "No"}</span>
-        </CardContent>
-      </Card>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => statusM.mutate()}
+              disabled={statusM.isPending}
+            >
+              Durumu Kontrol Et
+            </Button>
+            <Button onClick={() => sendM.mutate()} disabled={!parsed.ok || sendM.isPending}>
+              Komutu Gönder
+            </Button>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Command</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-3">
-          <Input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Type a BattlEye command (e.g., players)" />
-          <Button onClick={() => send.mutate()} disabled={!cmd || send.isPending}>
-            Send
-          </Button>
-        </CardContent>
-      </Card>
+          {statusM.data ? (
+            <div className="text-sm opacity-80">
+              Status: <b>{statusM.data.ok ? "OK" : "NOT READY"}</b>{" "}
+              {statusM.data.reason ? `(${statusM.data.reason})` : ""}
+              <div>Path: {statusM.data.apiBridgePath}</div>
+            </div>
+          ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Messages</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <pre className="text-xs bg-black/60 text-white rounded-lg p-4 overflow-auto max-h-[520px]">
-            {(status.data?.lastMessages ?? []).join("\n")}
-          </pre>
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Komut JSON</div>
+            <Textarea
+              value={jsonText}
+              onChange={(e) => setJsonText(e.target.value)}
+              className="min-h-[260px] font-mono text-xs"
+            />
+            {!parsed.ok ? (
+              <div className="text-xs text-red-600">JSON hatası: {parsed.error}</div>
+            ) : (
+              <div className="text-xs opacity-60">type + playerId + alanlar mod tarafındaki komutlara göre değişir.</div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

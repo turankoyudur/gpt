@@ -4,6 +4,7 @@ import { api, apiPut } from "@/lib/http";
 import SettingsCftoolsCard from "@/components/settings/SettingsCftoolsCard";
 import SettingsHeader from "@/components/settings/SettingsHeader";
 import SettingsHealthCard from "@/components/settings/SettingsHealthCard";
+import SettingsInstanceCard from "@/components/settings/SettingsInstanceCard";
 import SettingsLaunchCard from "@/components/settings/SettingsLaunchCard";
 import SettingsPathsCard from "@/components/settings/SettingsPathsCard";
 import SettingsRconCard from "@/components/settings/SettingsRconCard";
@@ -54,6 +55,7 @@ export default function Settings() {
     <div className="p-6 space-y-6">
       <SettingsHeader onSave={() => save.mutate()} isSaving={save.isPending} />
       <SettingsHealthCard checks={health.data?.checks} />
+      <SettingsInstanceCard form={form} onUpdate={update} />
       <SettingsPathsCard form={form} onUpdate={update} />
       <SettingsRconCard form={form} onUpdate={update} />
       <SettingsLaunchCard form={form} onUpdate={update} />

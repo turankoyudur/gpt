@@ -53,7 +53,7 @@ export class ServerControlService {
     await ensureJunctionsForMods({ dayzServerPath: s.dayzServerPath, mods: enabledMods });
 
     const modArg = enabledMods.length
-      ? `-mod=${enabledMods.map((m) => `@${m.workshopId}`).join(";")}`
+      ? `-mod=${enabledMods.map((m) => `@${m.folderName ?? m.workshopId}`).join(";")}`
       : null;
 
     const args = [
@@ -262,16 +262,16 @@ function splitArgs(input: string) {
 
 async function ensureJunctionsForMods(args: {
   dayzServerPath: string;
-  mods: { workshopId: string; installedPath: string | null }[];
+  mods: { workshopId: string; installedPath: string | null; folderName?: string | null }[];
 }) {
   // DayZ server generally loads mods from folders like "@CF" in the server directory.
-  // We create @<workshopId> junctions to workshop content.
+  // We create @<folderName> junctions to workshop content (fallback: workshopId).
   //
   // NOTE: On Windows, junction creation requires admin permission depending on policy.
   // If this fails, the UI will still let you manage mods, but the server may not load them.
   for (const mod of args.mods) {
     if (!mod.installedPath) continue;
-    const linkPath = path.join(args.dayzServerPath, `@${mod.workshopId}`);
+    const linkPath = path.join(args.dayzServerPath, `@${mod.folderName ?? mod.workshopId}`);
     if (fs.existsSync(linkPath)) continue;
 
     // We attempt to create the junction using a Windows command.

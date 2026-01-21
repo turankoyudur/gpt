@@ -1,4 +1,5 @@
 export type SettingsModel = {
+  instanceName: string;
   steamcmdPath: string;
   dayzServerPath: string;
   profilesPath: string;

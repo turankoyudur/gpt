@@ -42,9 +42,7 @@ export default defineConfig({
         // Prisma + native/dynamic stuff (bundle içine alınmasın)
         "@prisma/client",
         "prisma",
-        "battle-node-v2",
-        "battleye",
-      ],
+                      ],
       output: {
         format: "es",
         // start.bat -> dist/server/node-build.mjs arıyor

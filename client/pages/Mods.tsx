@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 type Mod = {
   workshopId: string;
   name: string | null;
+  folderName?: string | null;
   enabled: boolean;
   installedPath: string | null;
   lastUpdateTs: number | null;
@@ -36,12 +37,19 @@ export default function Mods() {
   const [searchQuery, setSearchQuery] = useState("");
   const [collectionId, setCollectionId] = useState("");
 
+  // --- Data ---
   const mods = useQuery({
     queryKey: ["mods"],
     queryFn: () => api<Mod[]>("/mods"),
     refetchInterval: 5000,
   });
 
+  const list = mods.data ?? [];
+  const enabledCount = useMemo(() => list.filter((m) => m.enabled).length, [list]);
+  const downloadedMods = useMemo(() => list.filter((m) => !!m.installedPath), [list]);
+  const catalogMods = useMemo(() => list.filter((m) => !m.installedPath), [list]);
+
+  // --- Mutations ---
   const add = useMutation({
     mutationFn: (id: string) => apiPost<Mod>("/mods/add", { workshopId: id }),
     onSuccess: () => {
@@ -54,12 +62,14 @@ export default function Mods() {
 
   const search = useQuery({
     queryKey: ["mods-search", searchQuery],
-    queryFn: () => api<WorkshopSearchResponse>(`/mods/search?query=${encodeURIComponent(searchQuery)}`),
+    queryFn: () =>
+      api<WorkshopSearchResponse>(`/mods/search?query=${encodeURIComponent(searchQuery)}`),
     enabled: searchQuery.trim().length >= 2,
   });
 
   const importCollection = useMutation({
-    mutationFn: (id: string) => apiPost<{ total: number; added: number }>("/mods/collection", { collectionId: id }),
+    mutationFn: (id: string) =>
+      apiPost<{ total: number; added: number }>("/mods/collection", { collectionId: id }),
     onSuccess: (data) => {
       setCollectionId("");
       qc.invalidateQueries({ queryKey: ["mods"] });
@@ -73,9 +83,9 @@ export default function Mods() {
     mutationFn: (id: string) => apiPost<any>("/mods/install", { workshopId: id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["mods"] });
-      toast({ title: "Install complete (or queued)" });
+      toast({ title: "Download complete (or queued)" });
     },
-    onError: (e: any) => toast({ title: "Install failed", description: `${e.code ?? ""} ${e.message}` }),
+    onError: (e: any) => toast({ title: "Download failed", description: `${e.code ?? ""} ${e.message}` }),
   });
 
   const toggle = useMutation({
@@ -110,16 +120,13 @@ export default function Mods() {
     },
   });
 
-  const list = mods.data ?? [];
-  const enabledCount = useMemo(() => list.filter((m) => m.enabled).length, [list]);
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Mods</h2>
           <p className="text-sm text-muted-foreground">
-            Add workshop mods by ID, install via SteamCMD, enable/disable for -mod launch parameter.
+            Search Workshop → download via SteamCMD → enable on the server (-mod=@folderName).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,9 +142,10 @@ export default function Mods() {
         </div>
       </div>
 
+      {/* Manual add for power users */}
       <Card>
         <CardHeader>
-          <CardTitle>Add Mod</CardTitle>
+          <CardTitle>Add by Workshop ID</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col md:flex-row gap-3">
           <Input
@@ -154,20 +162,23 @@ export default function Mods() {
         </CardContent>
       </Card>
 
+      {/* Search + download */}
       <Card>
         <CardHeader>
-          <CardTitle>Workshop Search</CardTitle>
+          <CardTitle>Steam Workshop Search</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col md:flex-row gap-3">
             <Input
-              placeholder="Search workshop mods"
+              placeholder="Search DayZ Workshop mods (requires Steam Web API key for best results)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+
           <div className="space-y-2">
             {search.isFetching && <div className="text-sm text-muted-foreground">Searching...</div>}
+
             {(search.data?.results ?? []).map((item) => (
               <div
                 key={item.workshopId}
@@ -177,15 +188,28 @@ export default function Mods() {
                   <div className="font-medium">{item.name || `Workshop ${item.workshopId}`}</div>
                   <div className="text-xs text-muted-foreground">
                     ID: {item.workshopId}
-                    {item.lastUpdateTs ? ` • Updated ${new Date(item.lastUpdateTs * 1000).toLocaleString()}` : ""}
+                    {item.lastUpdateTs
+                      ? ` • Updated ${new Date(item.lastUpdateTs * 1000).toLocaleString()}`
+                      : ""}
                     {item.subscriptions ? ` • Subs ${item.subscriptions.toLocaleString()}` : ""}
                   </div>
                 </div>
-                <Button size="sm" variant="secondary" onClick={() => add.mutate(item.workshopId)}>
-                  Add
-                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => add.mutate(item.workshopId)}>
+                    Add
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => install.mutate(item.workshopId)}
+                    disabled={install.isPending}
+                  >
+                    Download
+                  </Button>
+                </div>
               </div>
             ))}
+
             {searchQuery.trim().length >= 2 && (search.data?.results?.length ?? 0) === 0 && !search.isFetching && (
               <div className="text-sm text-muted-foreground">No results found.</div>
             )}
@@ -193,9 +217,10 @@ export default function Mods() {
         </CardContent>
       </Card>
 
+      {/* Collection */}
       <Card>
         <CardHeader>
-          <CardTitle>Collection Import</CardTitle>
+          <CardTitle>Import Collection</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col md:flex-row gap-3">
           <Input
@@ -207,19 +232,34 @@ export default function Mods() {
             onClick={() => importCollection.mutate(collectionId)}
             disabled={!collectionId || importCollection.isPending}
           >
-            Import Collection
+            Import
           </Button>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4">
-        {list.map((m) => (
-          <Card key={m.workshopId}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between gap-2">
-                <span className="truncate">
-                  {m.name ? m.name : `Workshop ${m.workshopId}`}
-                </span>
+      {/* Downloaded */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Downloaded Mods</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {downloadedMods.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No downloaded mods yet. Use Workshop Search above and click Download.
+            </div>
+          ) : null}
+
+          {downloadedMods.map((m) => (
+            <div key={m.workshopId} className="border rounded-md p-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <div className="flex-1">
+                  <div className="font-medium truncate">{m.name ?? `Workshop ${m.workshopId}`}</div>
+                  <div className="text-xs text-muted-foreground">
+                    ID: {m.workshopId}
+                    {m.folderName ? ` • Folder: @${m.folderName}` : ""}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Enabled</span>
@@ -228,23 +268,19 @@ export default function Mods() {
                       onCheckedChange={(v) => toggle.mutate({ id: m.workshopId, enabled: v })}
                     />
                   </div>
+
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={() => install.mutate(m.workshopId)}
                     disabled={install.isPending}
                   >
-                    Install/Update
+                    Update
                   </Button>
                 </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-muted-foreground">Workshop ID</div>
-                  <div className="font-medium">{m.workshopId}</div>
-                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <div className="text-muted-foreground">Installed Path</div>
                   <div className="font-medium truncate">{m.installedPath ?? "-"}</div>
@@ -255,19 +291,48 @@ export default function Mods() {
                     {m.lastUpdateTs ? new Date(m.lastUpdateTs * 1000).toISOString() : "-"}
                   </div>
                 </div>
+                <div>
+                  <div className="text-muted-foreground">Size</div>
+                  <div className="font-medium">
+                    {m.sizeBytes ? `${Math.round(m.sizeBytes / (1024 * 1024))} MB` : "-"}
+                  </div>
+                </div>
               </div>
-              <p className="mt-4 text-xs text-muted-foreground">
-                Tip: If DayZ doesn't load a mod, ensure the panel is run with enough permissions to create junctions
+
+              <p className="mt-3 text-xs text-muted-foreground">
+                Tip: If DayZ doesn&apos;t load a mod, ensure the panel has permissions to create junctions
                 inside your DayZ server directory.
               </p>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-        {list.length === 0 && (
-          <div className="text-sm text-muted-foreground">No mods yet. Add one with its workshop ID.</div>
-        )}
-      </div>
+      {/* Catalog */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Catalog (Not Downloaded Yet)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {catalogMods.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No catalog mods.</div>
+          ) : null}
+
+          {catalogMods.map((m) => (
+            <div key={m.workshopId} className="flex flex-col md:flex-row md:items-center gap-2 border rounded-md p-3">
+              <div className="flex-1">
+                <div className="font-medium">{m.name ?? `Workshop ${m.workshopId}`}</div>
+                <div className="text-xs text-muted-foreground">ID: {m.workshopId}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => install.mutate(m.workshopId)} disabled={install.isPending}>
+                  Download
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

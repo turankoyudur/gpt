@@ -25,6 +25,9 @@ model Mod {
   /// Steam Workshop published file id
   workshopId   String   @unique
   name         String?
+  /// Folder name that the panel uses under the server root (e.g. "CF" -> "@CF")
+  /// This is what gets passed in -mod=@<folderName> when starting the server.
+  folderName   String?
   description  String?
   sizeBytes    Int?
   lastUpdateTs Int?     // unix timestamp (best-effort)

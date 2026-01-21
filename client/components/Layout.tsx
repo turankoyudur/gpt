@@ -23,10 +23,10 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: <BarChart3 className="w-5 h-5" /> },
   { label: "Server", href: "/server", icon: <Zap className="w-5 h-5" /> },
   { label: "Mods", href: "/mods", icon: <Users className="w-5 h-5" /> },
-  { label: "RCON Console", href: "/console", icon: <Zap className="w-5 h-5" /> },
+  { label: "API Console", href: "/console", icon: <Zap className="w-5 h-5" /> },
+  { label: "API Bridge", href: "/apibridge", icon: <Shield className="w-5 h-5" /> },
   { label: "Configs", href: "/configs", icon: <Shield className="w-5 h-5" /> },
   { label: "Logs", href: "/logs", icon: <BarChart3 className="w-5 h-5" /> },
-  { label: "CFTools", href: "/cftools", icon: <Shield className="w-5 h-5" /> },
   { label: "Settings", href: "/settings", icon: <Settings className="w-5 h-5" /> },
 ];
 

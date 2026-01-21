@@ -13,6 +13,10 @@ export const ErrorCodes = {
   // Settings / config
   SETTINGS_NOT_CONFIGURED: "E_SETTINGS_NOT_CONFIGURED",
 
+  // Config
+  CONFIG_FILE_NOT_FOUND: "E_CONFIG_FILE_NOT_FOUND",
+  CONFIG_WRITE_FAILED: "E_CONFIG_WRITE_FAILED",
+
   // File IO
   FILE_NOT_FOUND: "E_FILE_NOT_FOUND",
   FILE_IO: "E_FILE_IO",
@@ -37,6 +41,11 @@ export const ErrorCodes = {
 
   // CFTools / GameLabs
   CFTOOLS_REQUEST_FAILED: "E_CFTOOLS_REQUEST_FAILED",
+
+  // ApiBridge (File Bridge)
+  APIBRIDGE_NOT_READY: "E_APIBRIDGE_NOT_READY",
+  APIBRIDGE_COMMAND_FAILED: "E_APIBRIDGE_COMMAND_FAILED",
+  APIBRIDGE_IO_FAILED: "E_APIBRIDGE_IO_FAILED",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import { getPrisma } from "../server/db/prisma";
+import { SettingsService } from "../server/modules/settings/settings.service";
 
 type CheckStatus = "ok" | "warn" | "fail";
 
@@ -38,25 +40,14 @@ async function checkPrismaClient() {
 }
 
 async function checkDatabase() {
+  const prisma = getPrisma();
   try {
-    // Dynamic import: allow doctor to run even when prisma generate hasn't been executed yet
-    const { getPrisma } = await import("../server/db/prisma");
-    const prisma = getPrisma();
-
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      record("Database", "ok", "Connection succeeded.");
-    } catch (error) {
-      record("Database", "fail", `Connection failed: ${(error as Error).message}`);
-    } finally {
-      await prisma.$disconnect();
-    }
+    await prisma.$queryRaw`SELECT 1`;
+    record("Database", "ok", "Connection succeeded.");
   } catch (error) {
-    record(
-      "Database",
-      "fail",
-      `Prisma client unavailable. Run \`npm run db:setup\`. (${(error as Error).message})`,
-    );
+    record("Database", "fail", `Connection failed: ${(error as Error).message}`);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -70,94 +61,48 @@ async function checkDistOutput() {
 }
 
 async function checkSettings() {
+  const prisma = getPrisma();
+  const settings = new SettingsService(prisma);
   try {
-    // Dynamic import: allow doctor to run even when DB isn't ready
-    const [{ getPrisma }, { SettingsService }] = await Promise.all([
-      import("../server/db/prisma"),
-      import("../server/modules/settings/settings.service"),
-    ]);
+    const current = await settings.get();
+    const checks = [
+      {
+        label: "SteamCMD path",
+        value: current.steamcmdPath,
+        exists: fs.existsSync(current.steamcmdPath),
+      },
+      {
+        label: "DayZ server path",
+        value: current.dayzServerPath,
+        exists: fs.existsSync(current.dayzServerPath),
+      },
+      {
+        label: "Profiles path",
+        value: current.profilesPath,
+        exists: fs.existsSync(current.profilesPath),
+      },
+      {
+        label: "ApiBridge path",
+        value: current.apiBridgePath,
+        exists: fs.existsSync(current.apiBridgePath),
+      },
+    ];
 
-    const prisma = getPrisma();
-    const settings = new SettingsService(prisma);
-
-    try {
-      const current = await settings.get();
-      const checks = [
-        {
-          label: "SteamCMD path",
-          value: current.steamcmdPath,
-          exists: current.steamcmdPath ? fs.existsSync(current.steamcmdPath) : false,
-        },
-        {
-          label: "DayZ server path",
-          value: current.dayzServerPath,
-          exists: current.dayzServerPath ? fs.existsSync(current.dayzServerPath) : false,
-        },
-        {
-          label: "BattlEye cfg path",
-          value: current.battleyeCfgPath,
-          exists: current.battleyeCfgPath ? fs.existsSync(current.battleyeCfgPath) : false,
-        },
-      ];
-
-      for (const check of checks) {
-        if (!check.value) {
-          record("Settings", "fail", `${check.label} is empty.`);
-          continue;
-        }
-        if (check.exists) {
-          record("Settings", "ok", `${check.label} set (${check.value}).`);
-        } else {
-          record("Settings", "warn", `${check.label} set but missing on disk (${check.value}).`);
-        }
+    for (const check of checks) {
+      if (!check.value) {
+        record("Settings", "fail", `${check.label} is empty.`);
+        continue;
       }
-    } catch (error) {
-      record("Settings", "fail", `Failed to read settings: ${(error as Error).message}`);
-    } finally {
-      await prisma.$disconnect();
+      if (check.exists) {
+        record("Settings", "ok", `${check.label} set (${check.value}).`);
+      } else {
+        record("Settings", "warn", `${check.label} set but missing on disk (${check.value}).`);
+      }
     }
   } catch (error) {
-    record("Settings", "fail", `Settings check skipped: Prisma client unavailable. (${(error as Error).message})`);
-  }
-}
-
-async function checkRconDependency() {
-  // Preferred package
-  const battleNodePath = path.join(process.cwd(), "node_modules", "battle-node-v2");
-  if (fs.existsSync(battleNodePath)) {
-    try {
-      const mod: any = await import("battle-node-v2");
-      const keys = Object.keys(mod ?? {});
-      record("RCON dependency", "ok", `battle-node-v2 import ok. Exports: ${keys.join(", ")}`);
-      return;
-    } catch (error) {
-      record(
-        "RCON dependency",
-        "warn",
-        `battle-node-v2 present but failed to import: ${(error as Error).message}`,
-      );
-      // Continue to check legacy
-    }
-  } else {
-    record("RCON dependency", "warn", "battle-node-v2 package not found in node_modules.");
-  }
-
-  // Legacy package (known to be broken in some installs)
-  const battleyePath = path.join(process.cwd(), "node_modules", "battleye");
-  if (!fs.existsSync(battleyePath)) {
-    record("RCON dependency (legacy)", "warn", "battleye package not found in node_modules.");
-    return;
-  }
-
-  try {
-    await import("battleye");
-    record("RCON dependency (legacy)", "ok", "battleye package import succeeded.");
-  } catch (error) {
-    record(
-      "RCON dependency (legacy)",
-      "warn",
-      `battleye present but failed to import: ${(error as Error).message}`,
-    );
+    record("Settings", "fail", `Failed to read settings: ${(error as Error).message}`);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -167,7 +112,6 @@ async function run() {
   await checkDatabase();
   await checkDistOutput();
   await checkSettings();
-  await checkRconDependency();
 
   const longest = results.reduce((max, item) => Math.max(max, item.label.length), 0);
   for (const result of results) {
@@ -176,7 +120,9 @@ async function run() {
   }
 
   const hasFailures = results.some((result) => result.status === "fail");
-  if (hasFailures) process.exit(1);
+  if (hasFailures) {
+    process.exit(1);
+  }
 }
 
 run();

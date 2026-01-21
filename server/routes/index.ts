@@ -3,9 +3,8 @@ import { settingsRouter } from "../modules/settings/settings.routes";
 import { configRouter } from "../modules/config/config.routes";
 import { modsRouter } from "../modules/mods/mods.routes";
 import { serverControlRouter } from "../modules/server-control/serverControl.routes";
-import { rconRouter } from "../modules/rcon/rcon.routes";
+import { apibridgeRouter } from "../modules/apibridge/apibridge.routes";
 import { logsRouter } from "../modules/logs/logs.routes";
-import { cftoolsRouter } from "../modules/cftools/cftools.routes";
 
 /**
  * Root API router.
@@ -22,9 +21,8 @@ export function createApiRouter() {
   router.use("/config", configRouter);
   router.use("/mods", modsRouter);
   router.use("/server", serverControlRouter);
-  router.use("/rcon", rconRouter);
+  router.use("/apibridge", apibridgeRouter);
   router.use("/logs", logsRouter);
-  router.use("/cftools", cftoolsRouter);
 
   return router;
 }

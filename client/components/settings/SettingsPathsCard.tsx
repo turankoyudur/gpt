@@ -29,14 +29,14 @@ export default function SettingsPathsCard({
           onChange={(value) => onUpdate("dayzServerPath", value)}
         />
         <SettingsField
-          label="Profiles Path"
+          label="Profiles Path (-profiles=...) "
           value={form.profilesPath}
           onChange={(value) => onUpdate("profilesPath", value)}
         />
         <SettingsField
-          label="BattlEye CFG Path (file or folder)"
-          value={form.battleyeCfgPath}
-          onChange={(value) => onUpdate("battleyeCfgPath", value)}
+          label="ApiBridge Path (Profiles\\ApiBridge)"
+          value={form.apiBridgePath}
+          onChange={(value) => onUpdate("apiBridgePath", value)}
         />
       </CardContent>
     </Card>

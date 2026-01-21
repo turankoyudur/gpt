@@ -6,6 +6,29 @@ import { AppError, ErrorCodes } from "../../core/errors";
 import { SettingsService } from "../settings/settings.service";
 import { getPrisma } from "../../db/prisma";
 
+
+/**
+ * Derive a stable mod folder name from the Workshop title.
+ *
+ * DayZ servers commonly use a folder naming convention like:
+ *   @CF, @VPPAdminTools, @My_Custom_Mod
+ *
+ * Workshop titles can contain characters that are invalid on Windows
+ * (e.g. : * ? " < > |). We sanitize aggressively.
+ */
+function deriveFolderName(title: string | undefined, workshopId: string): string {
+  const base = (title ?? workshopId).trim();
+  // Remove Windows-invalid filename chars and control chars
+  const cleaned = base.replace(/[\/:*?"<>|\u0000-\u001F]/g, "");
+  // Replace whitespace with underscores, collapse repeats
+  const underscored = cleaned.replace(/\s+/g, "_");
+  // Keep it reasonably short to avoid long paths
+  const limited = underscored.slice(0, 64);
+  // Final fallback
+  const finalName = limited.length ? limited : workshopId;
+  return finalName;
+}
+
 /**
  * ModsService
  *
@@ -38,6 +61,7 @@ export class ModsService {
       create: {
         workshopId,
         name: meta?.name,
+        folderName: deriveFolderName(meta?.name, workshopId),
         description: meta?.description,
         sizeBytes: meta?.sizeBytes,
         lastUpdateTs: meta?.lastUpdateTs,
@@ -45,6 +69,7 @@ export class ModsService {
       },
       update: {
         name: meta?.name,
+        folderName: deriveFolderName(meta?.name, workshopId),
         description: meta?.description,
         sizeBytes: meta?.sizeBytes,
         lastUpdateTs: meta?.lastUpdateTs,
@@ -60,6 +85,18 @@ export class ModsService {
    * - For safety, we take credentials from Settings (UI), not from code files.
    */
   async install(workshopId: string) {
+    // Ensure the mod exists in DB so /install works even if the UI calls it directly.
+    // We try to pull metadata first, but fall back to a minimal row if Steam API is unreachable.
+    try {
+      await this.add(workshopId);
+    } catch {
+      await this.db.mod.upsert({
+        where: { workshopId },
+        create: { workshopId, enabled: false, folderName: deriveFolderName(undefined, workshopId) },
+        update: {},
+      });
+    }
+
     const s = await this.settings.get();
 
     // Quick checks
@@ -105,9 +142,10 @@ export class ModsService {
     // Best-effort update installedPath
     const installedPath = fs.existsSync(workshopDir) ? workshopDir : undefined;
 
-    await this.db.mod.update({
+    await this.db.mod.upsert({
       where: { workshopId },
-      data: { installedPath },
+      create: { workshopId, enabled: false, name: null, folderName: deriveFolderName(undefined, workshopId), installedPath },
+      update: { installedPath },
     });
 
     return { ok: true, installedPath, output: result.stdout };
@@ -146,8 +184,59 @@ export class ModsService {
    */
   async search(query: string) {
     const trimmed = query.trim();
-    if (!trimmed) return { total: 0, results: [] as WorkshopSearchResult[] };
+    if (!trimmed) return { total: 0, results: [] };
 
+    const s = await this.settings.get();
+
+    // Prefer the official Steam Web API (requires a Web API key).
+    // This is more stable than scraping steamcommunity HTML/JSON endpoints.
+    if (s.steamWebApiKey) {
+      const input = {
+        // 221100 = DayZ app (Workshop universe for DayZ).
+        // query_type: 12 = RankedByTextSearch
+        appid: 221100,
+        query_type: 12,
+        search_text: trimmed,
+        // Keep responses small.
+        return_short_description: true,
+        return_metadata: true,
+        return_children: false,
+        return_kv_tags: false,
+        // Pagination
+        page: 1,
+        numperpage: 25,
+        cursor: "*",
+      };
+
+      const resp = await axios.get(
+        "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/",
+        {
+          params: {
+            key: s.steamWebApiKey,
+            input_json: JSON.stringify(input),
+          },
+          timeout: 10_000,
+        },
+      );
+
+      const details = Array.isArray(resp.data?.response?.publishedfiledetails)
+        ? resp.data.response.publishedfiledetails
+        : [];
+
+      const results = details.map((item: any) => ({
+        workshopId: String(item.publishedfileid ?? ""),
+        name: String(item.title ?? ""),
+        lastUpdateTs: toNumber(item.time_updated ?? item.time_updated?.toString()),
+        sizeBytes: toNumber(item.file_size ?? item.file_size?.toString()),
+        subscriptions: toNumber(item.subscriptions ?? item.subscriptions?.toString()),
+      }));
+
+      const total = toNumber(resp.data?.response?.total) ?? results.length;
+      return { total, results: results.filter((r) => r.workshopId) };
+    }
+
+    // Fallback: older steamcommunity endpoint.
+    // NOTE: This may break if Valve changes the endpoint behavior.
     const resp = await axios.get("https://steamcommunity.com/workshop/browse/", {
       params: {
         appid: 221100,
@@ -157,6 +246,7 @@ export class ModsService {
         actualsort: "textsearch",
         json: 1,
       },
+      timeout: 10_000,
     });
 
     const data = resp.data ?? {};
@@ -175,7 +265,6 @@ export class ModsService {
     }));
 
     const total = toNumber(data.total ?? data.response?.total) ?? results.length;
-
     return { total, results: results.filter((r) => r.workshopId) };
   }
 
@@ -201,6 +290,7 @@ export class ModsService {
           where: { workshopId: mod.workshopId },
           data: {
             name: meta.name,
+            folderName: deriveFolderName(meta.name, mod.workshopId),
             description: meta.description,
             sizeBytes: meta.sizeBytes,
             lastUpdateTs: meta.lastUpdateTs,

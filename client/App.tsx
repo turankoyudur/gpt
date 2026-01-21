@@ -10,7 +10,7 @@ import Server from "./pages/Server";
 import Mods from "./pages/Mods";
 import Configs from "./pages/Configs";
 import Logs from "./pages/Logs";
-import CFTools from "./pages/CFTools";
+import ApiBridge from "./pages/ApiBridge";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -31,7 +31,7 @@ export default function App() {
               <Route path="/console" element={<Console />} />
               <Route path="/configs" element={<Configs />} />
               <Route path="/logs" element={<Logs />} />
-              <Route path="/cftools" element={<CFTools />} />
+              <Route path="/apibridge" element={<ApiBridge />} />
               <Route path="/settings" element={<Settings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

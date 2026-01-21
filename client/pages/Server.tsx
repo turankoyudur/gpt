@@ -17,6 +17,14 @@ type TailResp = {
   lines: string[];
 };
 
+type Mod = {
+  workshopId: string;
+  name: string | null;
+  folderName?: string | null;
+  enabled: boolean;
+  installedPath: string | null;
+};
+
 export default function Server() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -24,6 +32,12 @@ export default function Server() {
     queryKey: ["server-status"],
     queryFn: () => api<ServerStatus>("/server/status"),
     refetchInterval: 3000,
+  });
+
+  const mods = useQuery({
+    queryKey: ["mods"],
+    queryFn: () => api<Mod[]>("/mods"),
+    refetchInterval: 5000,
   });
 
   const start = useMutation({
@@ -110,7 +124,40 @@ export default function Server() {
         </CardContent>
       </Card>
 
+      
+
       <Card>
+        <CardHeader>
+          <CardTitle>Enabled Mods</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {(() => {
+            const list = mods.data ?? [];
+            const enabled = list.filter((m) => m.enabled);
+            if (enabled.length === 0) {
+              return (
+                <div className="text-muted-foreground">
+                  No enabled mods. Enable mods from the Mods page.
+                </div>
+              );
+            }
+            return enabled.map((m) => (
+              <div key={m.workshopId} className="flex items-center justify-between border rounded-md p-2">
+                <div className="truncate">
+                  <div className="font-medium truncate">{m.name ?? `Workshop ${m.workshopId}`}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {m.folderName ? `@${m.folderName}` : `@${m.workshopId}`} • {m.workshopId}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {m.installedPath ? "Downloaded" : "Not downloaded"}
+                </div>
+              </div>
+            ));
+          })()}
+        </CardContent>
+      </Card>
+<Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Server Monitor</CardTitle>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
