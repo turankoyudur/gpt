@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiPut } from "@/lib/http";
-import SettingsCftoolsCard from "@/components/settings/SettingsCftoolsCard";
 import SettingsHeader from "@/components/settings/SettingsHeader";
 import SettingsHealthCard from "@/components/settings/SettingsHealthCard";
 import SettingsInstanceCard from "@/components/settings/SettingsInstanceCard";
 import SettingsLaunchCard from "@/components/settings/SettingsLaunchCard";
 import SettingsPathsCard from "@/components/settings/SettingsPathsCard";
-import SettingsRconCard from "@/components/settings/SettingsRconCard";
 import SettingsSteamCard from "@/components/settings/SettingsSteamCard";
 import { useToast } from "@/hooks/use-toast";
 import type { SettingsModel } from "@/types/settings";
@@ -57,10 +55,8 @@ export default function Settings() {
       <SettingsHealthCard checks={health.data?.checks} />
       <SettingsInstanceCard form={form} onUpdate={update} />
       <SettingsPathsCard form={form} onUpdate={update} />
-      <SettingsRconCard form={form} onUpdate={update} />
       <SettingsLaunchCard form={form} onUpdate={update} />
       <SettingsSteamCard form={form} onUpdate={update} />
-      <SettingsCftoolsCard form={form} onUpdate={update} />
     </div>
   );
 }
