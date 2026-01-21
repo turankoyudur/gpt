@@ -69,15 +69,6 @@ export const instanceSettingsSchema = z.object({
   profilesPath: z.string().min(1).default(defaultPaths.profilesPath),
   battleyeCfgPath: z.string().min(1).default(defaultPaths.battleyeCfgPath),
 
-  // RCON (BattlEye)
-  // NOTE:
-  // - Do NOT rely on BEServer_x64.cfg, because DayZ/BattlEye may rename it after the server starts.
-  // - These are entered via the Web UI so the panel can connect reliably.
-  rconHost: z.string().min(1).default("127.0.0.1"),
-  rconPort: z.coerce.number().int().positive().default(2306),
-  rconPassword: z.string().optional().default(""),
-  rconAutoConnect: z.coerce.boolean().default(true),
-
   // Launch params (stored as key/value and compiled into CLI args)
   serverPort: z.coerce.number().int().positive().default(2302),
   serverConfigFile: z.string().min(1).default("serverDZ.cfg"),
@@ -87,14 +78,8 @@ export const instanceSettingsSchema = z.object({
     .default("dologs -adminlog -netlog -freezecheck"),
 
   // Steam login (optional; workshop downloads often require an account)
-  steamUser: z.string().optional().default("") ,
-  steamPassword: z.string().optional().default("") ,
-
-  // CFTools Cloud (Data API)
-  cftoolsServerApiId: z.string().optional().default(""),
-  cftoolsAppId: z.string().optional().default(""),
-  cftoolsSecret: z.string().optional().default(""),
-  cftoolsEnterpriseKey: z.string().optional().default(""),
+  steamUser: z.string().optional().default(""),
+  steamPassword: z.string().optional().default(""),
 });
 
 export type InstanceSettings = z.infer<typeof instanceSettingsSchema>;

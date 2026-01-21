@@ -139,8 +139,6 @@ Backend modüler tasarlandı:
 - `server/modules/config` → DayZ/BattlEye config okuma-yazma
 - `server/modules/mods` → Workshop mod DB + SteamCMD download + enable/disable
 - `server/modules/server-control` → DayZ process start/stop + junction link
-- `server/modules/rcon` → BattlEye RCON bağlantısı
-- `server/modules/cftools` → CFTools/GameLabs Data API entegrasyonu (temel)
 - `server/modules/logs` → log list/tail
 
 Her modül:
